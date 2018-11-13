@@ -11,15 +11,23 @@ import (
 
 /////// Types
 type User struct {
-	id       string
-	login    string
-	password string
+	Id       string `json:"id,omitempty"`
+	Login    string `json:"login,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type UserCreationData struct {
-	login           string `json:"login,omitempty"`
-	password        string `json:"password,omitempty"`
-	passwordConfirm string `json:"passwordConfirm,omitempty"`
+	Login           string `json:"login,omitempty"`
+	Password        string `json:"password,omitempty"`
+	PasswordConfirm string `json:"passwordConfirm,omitempty"`
+}
+
+type ErrPasswordDoNotMatch struct {
+	message string
+}
+
+func (e *ErrPasswordDoNotMatch) Error() string {
+	return e.message
 }
 
 /////// Repositories
@@ -30,24 +38,34 @@ var users []User
 func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var data UserCreationData
 	_ = json.NewDecoder(r.Body).Decode(&data)
-	log.Println(data)
-	var user = CreateUserFromData(data)
+	user, err := CreateUserFromData(data)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	users = append(users, user)
-	log.Println(user)
 	json.NewEncoder(w).Encode(user)
 }
 
-func CreateUserFromData(d UserCreationData) User {
-	return User{
-		id:       uuid.New(),
-		login:    d.login,
-		password: d.password,
+func CreateUserFromData(d UserCreationData) (User, error) {
+	if d.Password != d.PasswordConfirm {
+		return User{}, &ErrPasswordDoNotMatch{"Passwords don't match"}
 	}
+
+	user := User{
+		Id:       uuid.New(),
+		Login:    d.Login,
+		Password: d.Password,
+	}
+	return user, nil
 }
 
 /////// Main
 func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/users", CreateUser).Methods("POST")
+	log.Println("Server running")
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
