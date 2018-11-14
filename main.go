@@ -40,11 +40,20 @@ type CreatePollData struct {
 	Name string `json:"name,omitempty"`
 }
 
+type AddOptionData struct {
+	Value string `json:"value,omitempty"`
+}
+
+type RemoveOptionData struct {
+	Value int `json:"value,omitempty"`
+}
+
 type Poll struct {
-	ID      string
-	Name    string
-	Options []string
-	Owner   string
+	ID        string
+	Name      string
+	Options   []string
+	Owner     string
+	Published bool
 }
 
 type AuthenticatedFunction func(b Session, c interface{}) interface{}
@@ -120,6 +129,17 @@ func SavePoll(poll Poll) Poll {
 	pollsByUser[poll.Owner] = append(pollsByUser[poll.Owner], poll)
 
 	return poll
+}
+
+func UpdatePoll(poll Poll) Poll {
+	log.Println("Updating Poll", poll)
+	polls[poll.ID] = poll
+
+	return poll
+}
+
+func FindPollById(id string) Poll {
+	return polls[id]
 }
 
 /////// Functions
@@ -222,6 +242,51 @@ func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func AddOption(w http.ResponseWriter, r *http.Request) {
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
+		var data AddOptionData
+		mapstructure.Decode(protoData, &data)
+
+		vars := mux.Vars(r)
+
+		poll := FindPollById(vars["id"])
+		poll.Options = append(poll.Options, data.Value)
+
+		return UpdatePoll(poll)
+	})
+}
+
+func RemoveOption(w http.ResponseWriter, r *http.Request) {
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
+		var data RemoveOptionData
+		mapstructure.Decode(protoData, &data)
+
+		vars := mux.Vars(r)
+
+		poll := FindPollById(vars["id"])
+		before := poll.Options[:data.Value]
+		after := poll.Options[data.Value+1:]
+		poll.Options[data.Value] = ""
+		poll.Options = before
+		for _, v := range after {
+			poll.Options = append(poll.Options, v)
+		}
+
+		return UpdatePoll(poll)
+	})
+}
+
+func Publish(w http.ResponseWriter, r *http.Request) {
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
+		vars := mux.Vars(r)
+
+		poll := FindPollById(vars["id"])
+		poll.Published = true
+
+		return UpdatePoll(poll)
+	})
+}
+
 func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f AuthenticatedFunction) {
 	session, err := CheckAuthentication(w, r)
 
@@ -239,6 +304,22 @@ func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f Authenticate
 }
 
 func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error) {
+	session, error := CheckSession(w, r)
+
+	if error != nil {
+		return session, error
+	}
+
+	user := FindUserById(session.UserID)
+
+	if user.Password == "" {
+		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Not authenticated."}
+	}
+
+	return session, nil
+}
+
+func CheckSession(w http.ResponseWriter, r *http.Request) (Session, error) {
 	sessionID := r.Header.Get("sessionId")
 
 	log.Println(sessionID)
@@ -266,8 +347,8 @@ func main() {
 
 	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
 	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
-	// router.HandleFunc("/polls/{id}", RemoveOption).Methods("PUT")
-	// router.HandleFunc("/polls/{id}", Finish).Methods("PUT")
+	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
+	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
 	// router.HandleFunc("/polls/{id}", CreateVote).Methods("POST")
 	// router.HandleFunc("/polls/{id}", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls", GetPolls).Methods("GET")
