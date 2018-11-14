@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pborman/uuid"
 )
 
@@ -45,6 +46,8 @@ type Poll struct {
 	Options []string
 	Owner   string
 }
+
+type AuthenticatedFunction func(b Session, c interface{}) interface{}
 
 /////// Errors
 type ErrPasswordDoNotMatch struct {
@@ -206,22 +209,13 @@ func CreateSession(u User) Session {
 }
 
 func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
-	session, err := CheckAuthentication(w, r)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
-	}
-
-	var data CreatePollData
-	_ = json.NewDecoder(r.Body).Decode(&data)
-
-	poll := DoCreatePoll(session, data)
-
-	json.NewEncoder(w).Encode(poll)
+	ExecuteAuthenticated(w, r, DoCreatePoll)
 }
 
-func DoCreatePoll(session Session, data CreatePollData) Poll {
+func DoCreatePoll(session Session, protoData interface{}) interface{} {
+	var data CreatePollData
+	mapstructure.Decode(protoData, &data)
+
 	poll := Poll{
 		ID:      uuid.New(),
 		Name:    data.Name,
@@ -232,6 +226,22 @@ func DoCreatePoll(session Session, data CreatePollData) Poll {
 	SavePoll(poll)
 
 	return poll
+}
+
+func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f AuthenticatedFunction) {
+	session, err := CheckAuthentication(w, r)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	var data interface{}
+	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	result := f(session, data)
+
+	json.NewEncoder(w).Encode(result)
 }
 
 func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error) {
