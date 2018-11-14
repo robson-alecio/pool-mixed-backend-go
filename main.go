@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -56,6 +57,22 @@ type Poll struct {
 	Published bool
 }
 
+type PollVote struct {
+	ID           string
+	PoolID       string
+	UserID       string
+	ChosenOption string
+}
+
+type PollVoteData struct {
+	Value string `json:"value,omitempty"`
+}
+
+type PollVoteResult struct {
+	VoteID       string
+	VoteCounting map[string]float64
+}
+
 type AuthenticatedFunction func(b Session, c interface{}) interface{}
 
 /////// Errors
@@ -89,6 +106,7 @@ var usersByLogin map[string]string = make(map[string]string)
 var sessions map[string]Session = make(map[string]Session)
 var polls map[string]Poll = make(map[string]Poll)
 var pollsByUser map[string][]Poll = make(map[string][]Poll)
+var votes map[string]map[string][]PollVote = make(map[string]map[string][]PollVote)
 
 func SaveUser(user User) User {
 	log.Println("Saving User", user)
@@ -140,6 +158,28 @@ func UpdatePoll(poll Poll) Poll {
 
 func FindPollById(id string) Poll {
 	return polls[id]
+}
+
+func SaveVote(vote PollVote) PollVote {
+	log.Println("Registering vote", vote)
+	pollMap, pollVoted := votes[vote.PoolID]
+
+	if !pollVoted {
+		pollMap := make(map[string][]PollVote)
+		votes[vote.PoolID] = pollMap
+	}
+
+	_, optionChosen := pollMap[vote.ChosenOption]
+
+	if !optionChosen {
+		pollMap[vote.ChosenOption] = make([]PollVote, 0)
+	}
+
+	pollMap[vote.ChosenOption] = append(pollMap[vote.ChosenOption], vote)
+
+	log.Println("Votes updated", votes)
+
+	return vote
 }
 
 /////// Functions
@@ -287,6 +327,68 @@ func Publish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func CreateVote(w http.ResponseWriter, r *http.Request) {
+	session, err := CheckSession(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+	}
+
+	vars := mux.Vars(r)
+	pollId := vars["id"]
+
+	var data PollVoteData
+	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	vote := PollVote{
+		ID:           uuid.New(),
+		PoolID:       pollId,
+		UserID:       session.UserID,
+		ChosenOption: data.Value,
+	}
+
+	SaveVote(vote)
+
+	voteResult := PollVoteResult{
+		VoteID:       vote.ID,
+		VoteCounting: CountVotes(pollId),
+	}
+
+	json.NewEncoder(w).Encode(voteResult)
+}
+
+func CountVotes(pollId string) map[string]float64 {
+	poll := FindPollById(pollId)
+	pollMap := votes[pollId]
+
+	total := TotalVotes(pollId)
+	result := make(map[string]float64)
+	result["total"] = float64(total)
+
+	for _, opt := range poll.Options {
+		list, ok := pollMap[opt]
+
+		if ok {
+			countVote := len(list)
+			perct := float64(countVote*100) / float64(total)
+			result[opt] = math.Round(perct*100) / 100
+		} else {
+			result[opt] = 0
+		}
+	}
+
+	return result
+}
+
+func TotalVotes(pollId string) int {
+	sum := 0
+
+	for _, list := range votes[pollId] {
+		sum += len(list)
+	}
+
+	return sum
+}
+
 func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f AuthenticatedFunction) {
 	session, err := CheckAuthentication(w, r)
 
@@ -349,7 +451,7 @@ func main() {
 	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
 	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
 	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
-	// router.HandleFunc("/polls/{id}", CreateVote).Methods("POST")
+	router.HandleFunc("/polls/{id}/vote", CreateVote).Methods("POST")
 	// router.HandleFunc("/polls/{id}", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls/mine", GetPolls).Methods("GET")
