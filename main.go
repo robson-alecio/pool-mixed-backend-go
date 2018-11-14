@@ -81,10 +81,11 @@ var sessions map[string]Session = make(map[string]Session)
 var polls map[string]Poll = make(map[string]Poll)
 var pollsByUser map[string][]Poll = make(map[string][]Poll)
 
-func SaveUser(user User) {
+func SaveUser(user User) User {
 	log.Println("Saving User", user)
 	users[user.ID] = user
 	usersByLogin[user.Login] = user.ID
+	return user
 }
 
 func FindUserByLogin(login string) (string, bool) {
@@ -96,9 +97,10 @@ func FindUserById(id string) User {
 	return users[id]
 }
 
-func SaveSession(session Session) {
+func SaveSession(session Session) Session {
 	log.Println("Saving Session", session)
 	sessions[session.ID] = session
+	return session
 }
 
 func FindSessionById(id string) (Session, bool) {
@@ -106,7 +108,7 @@ func FindSessionById(id string) (Session, bool) {
 	return session, ok
 }
 
-func SavePoll(poll Poll) {
+func SavePoll(poll Poll) Poll {
 	log.Println("Saving Poll", poll)
 	polls[poll.ID] = poll
 
@@ -116,6 +118,8 @@ func SavePoll(poll Poll) {
 		pollsByUser[poll.Owner] = make([]Poll, 1)
 	}
 	pollsByUser[poll.Owner] = append(pollsByUser[poll.Owner], poll)
+
+	return poll
 }
 
 /////// Functions
@@ -198,34 +202,24 @@ func Authenticate(data LoginData) (Session, error) {
 }
 
 func CreateSession(u User) Session {
-	session := Session{
+	return SaveSession(Session{
 		ID:     uuid.New(),
 		UserID: u.ID,
-	}
-
-	SaveSession(session)
-
-	return session
+	})
 }
 
 func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, DoCreatePoll)
-}
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
+		var data CreatePollData
+		mapstructure.Decode(protoData, &data)
 
-func DoCreatePoll(session Session, protoData interface{}) interface{} {
-	var data CreatePollData
-	mapstructure.Decode(protoData, &data)
-
-	poll := Poll{
-		ID:      uuid.New(),
-		Name:    data.Name,
-		Options: make([]string, 0),
-		Owner:   session.UserID,
-	}
-
-	SavePoll(poll)
-
-	return poll
+		return SavePoll(Poll{
+			ID:      uuid.New(),
+			Name:    data.Name,
+			Options: make([]string, 0),
+			Owner:   session.UserID,
+		})
+	})
 }
 
 func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f AuthenticatedFunction) {
@@ -271,7 +265,7 @@ func main() {
 	router.HandleFunc("/login", Login).Methods("POST")
 
 	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
-	// router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
+	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
 	// router.HandleFunc("/polls/{id}", RemoveOption).Methods("PUT")
 	// router.HandleFunc("/polls/{id}", Finish).Methods("PUT")
 	// router.HandleFunc("/polls/{id}", CreateVote).Methods("POST")
