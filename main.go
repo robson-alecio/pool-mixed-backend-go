@@ -35,8 +35,18 @@ type LoginData struct {
 	Password string `json:"password,omitempty"`
 }
 
-/////// Errors
+type CreatePollData struct {
+	Name string `json:"name,omitempty"`
+}
 
+type Poll struct {
+	ID      string
+	Name    string
+	Options []string
+	Owner   string
+}
+
+/////// Errors
 type ErrPasswordDoNotMatch struct {
 	message string
 }
@@ -53,10 +63,20 @@ func (e *ErrUserNotFound) Error() string {
 	return e.message
 }
 
+type ErrUserNotLogged struct {
+	message string
+}
+
+func (e *ErrUserNotLogged) Error() string {
+	return e.message
+}
+
 /////// Repositories
 var users map[string]User = make(map[string]User)
 var usersByLogin map[string]string = make(map[string]string)
 var sessions map[string]Session = make(map[string]Session)
+var polls map[string]Poll = make(map[string]Poll)
+var pollsByUser map[string][]Poll = make(map[string][]Poll)
 
 func SaveUser(user User) {
 	log.Println("Saving User", user)
@@ -64,9 +84,35 @@ func SaveUser(user User) {
 	usersByLogin[user.Login] = user.ID
 }
 
+func FindUserByLogin(login string) (string, bool) {
+	id, ok := usersByLogin[login]
+	return id, ok
+}
+
+func FindUserById(id string) User {
+	return users[id]
+}
+
 func SaveSession(session Session) {
 	log.Println("Saving Session", session)
 	sessions[session.ID] = session
+}
+
+func FindSessionById(id string) (Session, bool) {
+	session, ok := sessions[id]
+	return session, ok
+}
+
+func SavePoll(poll Poll) {
+	log.Println("Saving Poll", poll)
+	polls[poll.ID] = poll
+
+	_, has := pollsByUser[poll.Owner]
+
+	if !has {
+		pollsByUser[poll.Owner] = make([]Poll, 1)
+	}
+	pollsByUser[poll.Owner] = append(pollsByUser[poll.Owner], poll)
 }
 
 /////// Functions
@@ -126,7 +172,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	session, err := Authenticate(data)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -135,14 +181,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 func Authenticate(data LoginData) (Session, error) {
 	log.Println("Trying authenticate", data)
-	userID, ok := usersByLogin[data.Login]
+	userID, ok := FindUserByLogin(data.Login)
 
 	log.Println("Result ID", userID, ok)
 	if !ok {
 		return Session{}, &ErrUserNotFound{fmt.Sprintf("User %s not found.", data.Login)}
 	}
 
-	user := users[userID]
+	user := FindUserById(userID)
 	log.Println("Result User", user)
 
 	return CreateSession(user), nil
@@ -159,6 +205,53 @@ func CreateSession(u User) Session {
 	return session
 }
 
+func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
+	session, err := CheckAuthentication(w, r)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	var data CreatePollData
+	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	poll := DoCreatePoll(session, data)
+
+	json.NewEncoder(w).Encode(poll)
+}
+
+func DoCreatePoll(session Session, data CreatePollData) Poll {
+	poll := Poll{
+		ID:      uuid.New(),
+		Name:    data.Name,
+		Options: make([]string, 0),
+		Owner:   session.UserID,
+	}
+
+	SavePoll(poll)
+
+	return poll
+}
+
+func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error) {
+	sessionID := r.Header.Get("sessionId")
+
+	log.Println(sessionID)
+	if sessionID == "" {
+		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Missing value."}
+	}
+
+	session, ok := FindSessionById(sessionID)
+
+	log.Println(session, ok)
+	if !ok {
+		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Session invalid."}
+	}
+
+	return session, nil
+}
+
 /////// Main
 func main() {
 	router := mux.NewRouter()
@@ -167,12 +260,14 @@ func main() {
 	router.HandleFunc("/visit", Visit).Methods("POST")
 	router.HandleFunc("/login", Login).Methods("POST")
 
-	// router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
-	// router.HandleFunc("/polls", AddOption).Methods("PUT")
-	// router.HandleFunc("/polls", RemoveOption).Methods("PUT")
-	// router.HandleFunc("/polls", Finish).Methods("PUT")
-	// router.HandleFunc("/polls", CreateVote).Methods("POST")
+	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
+	// router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
+	// router.HandleFunc("/polls/{id}", RemoveOption).Methods("PUT")
+	// router.HandleFunc("/polls/{id}", Finish).Methods("PUT")
+	// router.HandleFunc("/polls/{id}", CreateVote).Methods("POST")
+	// router.HandleFunc("/polls/{id}", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls", GetPolls).Methods("GET")
+	// router.HandleFunc("/polls/mine", GetPolls).Methods("GET")
 
 	log.Println("Server running")
 	log.Fatal(http.ListenAndServe(":8000", router))
