@@ -73,31 +73,33 @@ type PollVoteResult struct {
 	VoteCounting map[string]float64
 }
 
-type AuthenticatedFunction func(b Session, c interface{}) interface{}
+type AuthenticatedFunction func(b Session, c interface{}) (interface{}, error)
 
 /////// Errors
-type ErrPasswordDoNotMatch struct {
-	message string
-}
+type ErrPasswordDoNotMatch string
 
-func (e *ErrPasswordDoNotMatch) Error() string {
-	return e.message
+func (e ErrPasswordDoNotMatch) Error() string {
+	return string(e)
 }
 
 type ErrUserNotFound struct {
-	message string
+	Login string
 }
 
-func (e *ErrUserNotFound) Error() string {
-	return e.message
+func (e ErrUserNotFound) Error() string {
+	return fmt.Sprintf("User %s not found.", e.Login)
 }
 
-type ErrUserNotLogged struct {
-	message string
+type ErrUserNotLogged string
+
+func (e ErrUserNotLogged) Error() string {
+	return string(e)
 }
 
-func (e *ErrUserNotLogged) Error() string {
-	return e.message
+type ErrNotChangePoll string
+
+func (e ErrNotChangePoll) Error() string {
+	return string(e)
 }
 
 /////// Repositories
@@ -165,7 +167,7 @@ func SaveVote(vote PollVote) PollVote {
 	pollMap, pollVoted := votes[vote.PoolID]
 
 	if !pollVoted {
-		pollMap := make(map[string][]PollVote)
+		pollMap = make(map[string][]PollVote)
 		votes[vote.PoolID] = pollMap
 	}
 
@@ -176,8 +178,6 @@ func SaveVote(vote PollVote) PollVote {
 	}
 
 	pollMap[vote.ChosenOption] = append(pollMap[vote.ChosenOption], vote)
-
-	log.Println("Votes updated", votes)
 
 	return vote
 }
@@ -199,7 +199,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 func CreateUserFromData(d UserCreationData) (User, error) {
 	if d.Password != d.PasswordConfirm {
-		return User{}, &ErrPasswordDoNotMatch{"Passwords don't match"}
+		return User{}, ErrPasswordDoNotMatch("Passwords don't match")
 	}
 
 	user := User{
@@ -252,7 +252,7 @@ func Authenticate(data LoginData) (Session, error) {
 
 	log.Println("Result ID", userID, ok)
 	if !ok {
-		return Session{}, &ErrUserNotFound{fmt.Sprintf("User %s not found.", data.Login)}
+		return Session{}, ErrUserNotFound{Login: data.Login}
 	}
 
 	user := FindUserById(userID)
@@ -269,7 +269,7 @@ func CreateSession(u User) Session {
 }
 
 func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
 		var data CreatePollData
 		mapstructure.Decode(protoData, &data)
 
@@ -278,53 +278,61 @@ func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
 			Name:    data.Name,
 			Options: make([]string, 0),
 			Owner:   session.UserID,
-		})
+		}), nil
 	})
 }
 
 func AddOption(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
-		var data AddOptionData
-		mapstructure.Decode(protoData, &data)
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+		return ChangePollOrCry(w, r, session, func(poll *Poll) {
+			var data AddOptionData
+			mapstructure.Decode(protoData, &data)
 
-		vars := mux.Vars(r)
-
-		poll := FindPollById(vars["id"])
-		poll.Options = append(poll.Options, data.Value)
-
-		return UpdatePoll(poll)
+			poll.Options = append(poll.Options, data.Value)
+		})
 	})
 }
 
 func RemoveOption(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
-		var data RemoveOptionData
-		mapstructure.Decode(protoData, &data)
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+		return ChangePollOrCry(w, r, session, func(poll *Poll) {
+			var data RemoveOptionData
+			mapstructure.Decode(protoData, &data)
 
-		vars := mux.Vars(r)
-
-		poll := FindPollById(vars["id"])
-		before := poll.Options[:data.Value]
-		after := poll.Options[data.Value+1:]
-		poll.Options[data.Value] = ""
-		poll.Options = before
-		for _, v := range after {
-			poll.Options = append(poll.Options, v)
-		}
-
-		return UpdatePoll(poll)
+			before := poll.Options[:data.Value]
+			after := poll.Options[data.Value+1:]
+			poll.Options[data.Value] = ""
+			poll.Options = before
+			for _, v := range after {
+				poll.Options = append(poll.Options, v)
+			}
+		})
 	})
 }
 
 func Publish(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) interface{} {
-		vars := mux.Vars(r)
-
-		poll := FindPollById(vars["id"])
-		poll.Published = true
-
-		return UpdatePoll(poll)
+	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+		return ChangePollOrCry(w, r, session, func(poll *Poll) {
+			poll.Published = true
+		})
 	})
+}
+
+func ChangePollOrCry(w http.ResponseWriter, r *http.Request, session Session, fChange func(aPoll *Poll)) (Poll, error) {
+	vars := mux.Vars(r)
+	poll := FindPollById(vars["id"])
+
+	if poll.Published {
+		return Poll{}, ErrNotChangePoll("Can't change a published poll.")
+	}
+
+	if poll.Owner != session.UserID {
+		return Poll{}, ErrNotChangePoll("Can't change a poll from other user.")
+	}
+
+	fChange(&poll)
+
+	return UpdatePoll(poll), nil
 }
 
 func CreateVote(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +346,12 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 
 	var data PollVoteData
 	_ = json.NewDecoder(r.Body).Decode(&data)
+
+	if !ExistsOption(pollId, data.Value) {
+		message := fmt.Sprintf("There is no option %s for vote on this poll.", data.Value)
+		http.Error(w, message, http.StatusConflict)
+		return
+	}
 
 	vote := PollVote{
 		ID:           uuid.New(),
@@ -354,6 +368,18 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(voteResult)
+}
+
+func ExistsOption(pollId, candidate string) bool {
+	poll := FindPollById(pollId)
+
+	for _, opt := range poll.Options {
+		if opt == candidate {
+			return true
+		}
+	}
+
+	return false
 }
 
 func CountVotes(pollId string) map[string]float64 {
@@ -400,7 +426,12 @@ func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f Authenticate
 	var data interface{}
 	_ = json.NewDecoder(r.Body).Decode(&data)
 
-	result := f(session, data)
+	result, err := f(session, data)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
 
 	json.NewEncoder(w).Encode(result)
 }
@@ -415,7 +446,7 @@ func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error
 	user := FindUserById(session.UserID)
 
 	if user.Password == "" {
-		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Not authenticated."}
+		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
 	}
 
 	return session, nil
@@ -426,14 +457,14 @@ func CheckSession(w http.ResponseWriter, r *http.Request) (Session, error) {
 
 	log.Println(sessionID)
 	if sessionID == "" {
-		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Missing value."}
+		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Missing value.")
 	}
 
 	session, ok := FindSessionById(sessionID)
 
 	log.Println(session, ok)
 	if !ok {
-		return Session{}, &ErrUserNotLogged{"Must be logged to perform this action. Session invalid."}
+		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Session invalid.")
 	}
 
 	return session, nil
@@ -452,7 +483,8 @@ func main() {
 	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
 	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
 	router.HandleFunc("/polls/{id}/vote", CreateVote).Methods("POST")
-	// router.HandleFunc("/polls/{id}", GetPolls).Methods("GET")
+	// router.HandleFunc("/polls/{id}", GetPoll).Methods("GET")
+	// router.HandleFunc("/polls/{id}/counting", GetPoll).Methods("GET")
 	// router.HandleFunc("/polls", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls/mine", GetPolls).Methods("GET")
 
