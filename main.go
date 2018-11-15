@@ -415,6 +415,33 @@ func TotalVotes(pollId string) int {
 	return sum
 }
 
+func GetPoll(w http.ResponseWriter, r *http.Request) {
+	ExecuteSessioned(w, r, func(session Session) interface{} {
+		vars := mux.Vars(r)
+		return FindPollById(vars["id"])
+	})
+}
+
+func CountingPollVotes(w http.ResponseWriter, r *http.Request) {
+	ExecuteSessioned(w, r, func(session Session) interface{} {
+		vars := mux.Vars(r)
+		return CountVotes(vars["id"])
+	})
+}
+
+func ExecuteSessioned(w http.ResponseWriter, r *http.Request, f func(session Session) interface{}) {
+	session, err := CheckSession(w, r)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	result := f(session)
+
+	json.NewEncoder(w).Encode(result)
+}
+
 func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f AuthenticatedFunction) {
 	session, err := CheckAuthentication(w, r)
 
@@ -483,8 +510,8 @@ func main() {
 	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
 	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
 	router.HandleFunc("/polls/{id}/vote", CreateVote).Methods("POST")
-	// router.HandleFunc("/polls/{id}", GetPoll).Methods("GET")
-	// router.HandleFunc("/polls/{id}/counting", GetPoll).Methods("GET")
+	router.HandleFunc("/polls/{id}", GetPoll).Methods("GET")
+	router.HandleFunc("/polls/{id}/counting", CountingPollVotes).Methods("GET")
 	// router.HandleFunc("/polls", GetPolls).Methods("GET")
 	// router.HandleFunc("/polls/mine", GetPolls).Methods("GET")
 
