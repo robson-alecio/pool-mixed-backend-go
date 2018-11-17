@@ -1,0 +1,448 @@
+{
+	"info": {
+		"_postman_id": "bdfe1ff0-4bf3-4e41-91f0-c9fcc76cb8ba",
+		"name": "MIxed Poll",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create User",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"login\": \"robson.alecio@gmail.com\",\n\t\"password\": \"12345678\",\n\t\"passwordConfirm\": \"12345678\"\n}"
+				},
+				"url": {
+					"raw": "{{host}}/users",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"users"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Visit",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "79bf7855-0e18-46e6-b9ca-e407d9917c48",
+						"type": "text/javascript",
+						"exec": [
+							"var jsonData = JSON.parse(responseBody);",
+							"",
+							"var schema = {",
+							" \"ID\": {",
+							"    \"type\": \"string\"",
+							" },",
+							" \"UserID\": {",
+							"    \"type\": \"string\"",
+							" },",
+							"};",
+							"",
+							"var valid = tv4.validate(jsonData, schema);",
+							"",
+							"tests[\"response json valid for login\"] = valid;",
+							"",
+							"if (valid) {",
+							"    postman.setEnvironmentVariable(\"sessionId\", jsonData.ID);",
+							"}",
+							""
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {},
+				"url": {
+					"raw": "{{host}}/visit",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"visit"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "febee671-0b5d-406f-9c3c-7346c9d73836",
+						"type": "text/javascript",
+						"exec": [
+							"var jsonData = JSON.parse(responseBody);",
+							"",
+							"var schema = {",
+							" \"ID\": {",
+							"    \"type\": \"string\"",
+							" },",
+							" \"UserID\": {",
+							"    \"type\": \"string\"",
+							" },",
+							"};",
+							"",
+							"var valid = tv4.validate(jsonData, schema);",
+							"",
+							"tests[\"response json valid for login\"] = valid;",
+							"",
+							"if (valid) {",
+							"    postman.setEnvironmentVariable(\"sessionId\", jsonData.ID);",
+							"}",
+							""
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"login\": \"robson.alecio@gmail.com\",\n\t\"password\": \"12345678\"\n}"
+				},
+				"url": {
+					"raw": "{{host}}/login",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start Create Poll",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "3e2a00c3-21c3-4d29-94a9-e2229c4198ff",
+						"type": "text/javascript",
+						"exec": [
+							"var jsonData = JSON.parse(responseBody);",
+							"",
+							"var schema = {",
+							"    \"ID\": {",
+							"      \"type\": \"string\"",
+							"    },",
+							"    \"Name\": {",
+							"      \"type\": \"string\"",
+							"     },",
+							"    \"Options\": {",
+							"      \"type\": \"array\",",
+							"      \"items\": {",
+							"    \t\"type\": \"string\"",
+							"      }",
+							"    },",
+							"    \"Owner\": {",
+							"      \"type\": \"string\"",
+							"    }",
+							"};",
+							"",
+							"var valid = tv4.validate(jsonData, schema);",
+							"",
+							"tests[\"response json valid for polls\"] = valid;",
+							"",
+							"if (valid) {",
+							"    postman.setEnvironmentVariable(\"pollId\", jsonData.ID);",
+							"}",
+							""
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"name\": \"Poll A\"\n}"
+				},
+				"url": {
+					"raw": "{{host}}/polls",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Vote",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"id": "4a0f1afe-c31e-4e83-ac91-3362cc549107",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"value\": \"A\"\n}"
+				},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}/vote",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}",
+						"vote"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Add Option",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"value\": \"A\"\n}"
+				},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Publish",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}/publish",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}",
+						"publish"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Remove Option",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"value\": 0\n}"
+				},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Poll",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Polls",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {},
+				"url": {
+					"raw": "{{host}}/polls",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Mine Polls",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {},
+				"url": {
+					"raw": "{{host}}/mine/polls",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"mine",
+						"polls"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"id": "e250450a-723d-4ca0-82b3-e5b54a939ed4",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"id": "930999f6-0636-4ae4-942d-baadfffdff25",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"id": "d5457685-68e8-41a7-abe6-e10944be2646",
+			"key": "host",
+			"value": "localhost:8000",
+			"type": "string",
+			"description": ""
+		}
+	]
+}

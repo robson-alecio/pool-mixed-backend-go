@@ -112,6 +112,7 @@ var sessions map[string]Session = make(map[string]Session)
 var polls map[string]Poll = make(map[string]Poll)
 var pollsByUser map[string][]Poll = make(map[string][]Poll)
 var votes map[string]map[string][]PollVote = make(map[string]map[string][]PollVote)
+var pollVotedByUser map[string]map[string]bool = make(map[string]map[string]bool)
 
 func SaveUser(user User) User {
 	log.Println("Saving User", user)
@@ -171,6 +172,7 @@ func SaveVote(vote PollVote) PollVote {
 
 	if !pollVoted {
 		pollMap = make(map[string][]PollVote)
+		pollVotedByUser[vote.PoolID] = make(map[string]bool)
 		votes[vote.PoolID] = pollMap
 	}
 
@@ -181,8 +183,27 @@ func SaveVote(vote PollVote) PollVote {
 	}
 
 	pollMap[vote.ChosenOption] = append(pollMap[vote.ChosenOption], vote)
+	pollVotedByUser[vote.PoolID][vote.UserID] = true
 
 	return vote
+}
+
+func PollAlreadyVotedByUser(pollId, userId string) bool {
+	_, exists := pollVotedByUser[pollId][userId]
+
+	return exists
+}
+
+func ExistsOption(pollId, candidate string) bool {
+	poll := FindPollById(pollId)
+
+	for _, opt := range poll.Options {
+		if opt == candidate {
+			return true
+		}
+	}
+
+	return false
 }
 
 /////// Functions
@@ -357,6 +378,12 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if PollAlreadyVotedByUser(pollId, session.UserID) {
+		message := fmt.Sprintf("You already voted in this poll.")
+		http.Error(w, message, http.StatusConflict)
+		return
+	}
+
 	vote := PollVote{
 		ID:           uuid.New(),
 		PoolID:       pollId,
@@ -372,18 +399,6 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(voteResult)
-}
-
-func ExistsOption(pollId, candidate string) bool {
-	poll := FindPollById(pollId)
-
-	for _, opt := range poll.Options {
-		if opt == candidate {
-			return true
-		}
-	}
-
-	return false
 }
 
 func CountVotes(pollId string) map[string]float64 {
@@ -446,14 +461,10 @@ func GetPolls(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPollsMine(w http.ResponseWriter, r *http.Request) {
-	log.Println("Getting mine start")
 	ExecuteSessioned(w, r, func(session Session) interface{} {
 		pollsMineSorted := make([]Poll, 0)
-		log.Println("Getting mine")
 		for _, poll := range polls {
-			log.Println("poll.Owner == session.UserID", poll.Owner, session.UserID, poll.Owner == session.UserID)
 			if poll.Owner == session.UserID {
-				log.Println("Adding poll", poll)
 				pollsMineSorted = append(pollsMineSorted, poll)
 			}
 		}
