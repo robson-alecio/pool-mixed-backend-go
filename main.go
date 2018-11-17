@@ -6,6 +6,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sort"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mitchellh/mapstructure"
@@ -51,6 +53,7 @@ type RemoveOptionData struct {
 
 type Poll struct {
 	ID        string
+	CreatedAt time.Time
 	Name      string
 	Options   []string
 	Owner     string
@@ -274,10 +277,11 @@ func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
 		mapstructure.Decode(protoData, &data)
 
 		return SavePoll(Poll{
-			ID:      uuid.New(),
-			Name:    data.Name,
-			Options: make([]string, 0),
-			Owner:   session.UserID,
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			Name:      data.Name,
+			Options:   make([]string, 0),
+			Owner:     session.UserID,
 		}), nil
 	})
 }
@@ -429,6 +433,43 @@ func CountingPollVotes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func GetPolls(w http.ResponseWriter, r *http.Request) {
+	ExecuteSessioned(w, r, func(session Session) interface{} {
+		log.Println("Getting all")
+		pollsSorted := make([]Poll, 0)
+		for _, poll := range polls {
+			pollsSorted = append(pollsSorted, poll)
+		}
+
+		return SortPolls(pollsSorted)
+	})
+}
+
+func GetPollsMine(w http.ResponseWriter, r *http.Request) {
+	log.Println("Getting mine start")
+	ExecuteSessioned(w, r, func(session Session) interface{} {
+		pollsMineSorted := make([]Poll, 0)
+		log.Println("Getting mine")
+		for _, poll := range polls {
+			log.Println("poll.Owner == session.UserID", poll.Owner, session.UserID, poll.Owner == session.UserID)
+			if poll.Owner == session.UserID {
+				log.Println("Adding poll", poll)
+				pollsMineSorted = append(pollsMineSorted, poll)
+			}
+		}
+
+		return SortPolls(pollsMineSorted)
+	})
+}
+
+func SortPolls(polls []Poll) []Poll {
+	sort.Slice(polls, func(i, j int) bool {
+		return polls[i].CreatedAt.Before(polls[j].CreatedAt)
+	})
+
+	return polls
+}
+
 func ExecuteSessioned(w http.ResponseWriter, r *http.Request, f func(session Session) interface{}) {
 	session, err := CheckSession(w, r)
 
@@ -482,14 +523,12 @@ func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error
 func CheckSession(w http.ResponseWriter, r *http.Request) (Session, error) {
 	sessionID := r.Header.Get("sessionId")
 
-	log.Println(sessionID)
 	if sessionID == "" {
 		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Missing value.")
 	}
 
 	session, ok := FindSessionById(sessionID)
 
-	log.Println(session, ok)
 	if !ok {
 		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Session invalid.")
 	}
@@ -512,8 +551,8 @@ func main() {
 	router.HandleFunc("/polls/{id}/vote", CreateVote).Methods("POST")
 	router.HandleFunc("/polls/{id}", GetPoll).Methods("GET")
 	router.HandleFunc("/polls/{id}/counting", CountingPollVotes).Methods("GET")
-	// router.HandleFunc("/polls", GetPolls).Methods("GET")
-	// router.HandleFunc("/polls/mine", GetPolls).Methods("GET")
+	router.HandleFunc("/polls", GetPolls).Methods("GET")
+	router.HandleFunc("/mine/polls", GetPollsMine).Methods("GET")
 
 	log.Println("Server running")
 	log.Fatal(http.ListenAndServe(":8000", router))
