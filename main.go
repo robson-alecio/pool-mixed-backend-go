@@ -125,7 +125,7 @@ func ExistsOption(pollID kallax.ULID, candidate string) bool {
 	poll := FindPollById(pollID)
 
 	for _, opt := range poll.Options {
-		if opt == candidate {
+		if opt.Content == candidate {
 			return true
 		}
 	}
@@ -235,7 +235,7 @@ func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
 		return SavePoll(Poll{
 			ID:      kallax.NewULID(),
 			Name:    data.Name,
-			Options: make([]string, 0),
+			Options: make([]*PollOption, 0),
 			Owner:   session.UserID,
 		}), nil
 	})
@@ -248,7 +248,11 @@ func AddOption(w http.ResponseWriter, r *http.Request) {
 			var data AddOptionData
 			mapstructure.Decode(protoData, &data)
 
-			poll.Options = append(poll.Options, data.Value)
+			poll.Options = append(poll.Options, &PollOption{
+				ID:      kallax.NewULID(),
+				Owner:   poll,
+				Content: data.Value,
+			})
 		})
 	})
 }
@@ -262,7 +266,6 @@ func RemoveOption(w http.ResponseWriter, r *http.Request) {
 
 			before := poll.Options[:data.Value]
 			after := poll.Options[data.Value+1:]
-			poll.Options[data.Value] = ""
 			poll.Options = before
 			for _, v := range after {
 				poll.Options = append(poll.Options, v)
@@ -359,14 +362,14 @@ func CountVotes(pollID kallax.ULID) map[string]float64 {
 	result["total"] = float64(total)
 
 	for _, opt := range poll.Options {
-		list, ok := pollMap[opt]
+		list, ok := pollMap[opt.Content]
 
 		if ok {
 			countVote := len(list)
 			perct := float64(countVote*100) / float64(total)
-			result[opt] = math.Round(perct*100) / 100
+			result[opt.Content] = math.Round(perct*100) / 100
 		} else {
-			result[opt] = 0
+			result[opt.Content] = 0
 		}
 	}
 
