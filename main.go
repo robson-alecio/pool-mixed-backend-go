@@ -93,12 +93,12 @@ func FindPollById(id kallax.ULID) Poll {
 //SaveVote ...
 func SaveVote(vote PollVote) PollVote {
 	log.Println("Registering vote", vote)
-	pollMap, pollVoted := votes[vote.PoolID]
+	pollMap, pollVoted := votes[vote.PollID]
 
 	if !pollVoted {
 		pollMap = make(map[string][]PollVote)
-		pollVotedByUser[vote.PoolID] = make(map[kallax.ULID]bool)
-		votes[vote.PoolID] = pollMap
+		pollVotedByUser[vote.PollID] = make(map[kallax.ULID]bool)
+		votes[vote.PollID] = pollMap
 	}
 
 	_, optionChosen := pollMap[vote.ChosenOption]
@@ -108,7 +108,7 @@ func SaveVote(vote PollVote) PollVote {
 	}
 
 	pollMap[vote.ChosenOption] = append(pollMap[vote.ChosenOption], vote)
-	pollVotedByUser[vote.PoolID][vote.UserID] = true
+	pollVotedByUser[vote.PollID][vote.UserID] = true
 
 	return vote
 }
@@ -337,7 +337,7 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 
 	vote := PollVote{
 		ID:           kallax.NewULID(),
-		PoolID:       pollID,
+		PollID:       pollID,
 		UserID:       session.UserID,
 		ChosenOption: data.Value,
 	}
