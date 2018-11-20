@@ -7,7 +7,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"sort"
 
 	"gopkg.in/src-d/go-kallax.v1"
 
@@ -15,18 +14,14 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-type AuthenticatedFunction func(b Session, c interface{}) (interface{}, error)
+type AuthenticatedFunction func(session *Session, data interface{}) (interface{}, error)
 
 /////// Repositories
 var db *sql.DB
 var userStore *UserStore
-var users map[kallax.ULID]User = make(map[kallax.ULID]User)
-var usersByLogin map[string]kallax.ULID = make(map[string]kallax.ULID)
-var sessions map[kallax.ULID]Session = make(map[kallax.ULID]Session)
-var polls map[kallax.ULID]Poll = make(map[kallax.ULID]Poll)
-var pollsByUser map[kallax.ULID][]Poll = make(map[kallax.ULID][]Poll)
-var votes map[kallax.ULID]map[string][]PollVote = make(map[kallax.ULID]map[string][]PollVote)
-var pollVotedByUser map[kallax.ULID]map[kallax.ULID]bool = make(map[kallax.ULID]map[kallax.ULID]bool)
+var sessionStore *SessionStore
+var pollStore *PollStore
+var pollVoteStore *PollVoteStore
 
 //SaveUser ...
 func SaveUser(user User) User {
@@ -34,103 +29,84 @@ func SaveUser(user User) User {
 
 	userStore.Save(&user)
 
-	usersByLogin[user.Login] = user.ID
 	return user
 }
 
 //FindUserByLogin ...
-func FindUserByLogin(login string) (kallax.ULID, bool) {
-	id, ok := usersByLogin[login]
-	return id, ok
+func FindUserByLogin(login string) (*User, error) {
+	query := NewUserQuery().FindByLogin(login)
+	return userStore.FindOne(query)
 }
 
 //FindUserById ...
-func FindUserById(id kallax.ULID) User {
-	return users[id]
+func FindUserById(id kallax.ULID) (*User, error) {
+	query := NewUserQuery().FindByID(id)
+	return userStore.FindOne(query)
 }
 
 //SaveSession ...
 func SaveSession(session Session) Session {
 	log.Println("Saving Session", session)
-	sessions[session.ID] = session
+
+	sessionStore.Save(&session)
 	return session
 }
 
 //FindSessionById ...
-func FindSessionById(id kallax.ULID) (Session, bool) {
-	session, ok := sessions[id]
-	return session, ok
+func FindSessionById(id kallax.ULID) (*Session, error) {
+	query := NewSessionQuery().FindByID(id)
+	return sessionStore.FindOne(query)
 }
 
 //SavePoll ...
-func SavePoll(poll Poll) Poll {
+func SavePoll(poll *Poll) (bool, error) {
 	log.Println("Saving Poll", poll)
-	polls[poll.ID] = poll
 
-	_, has := pollsByUser[poll.Owner]
-
-	if !has {
-		pollsByUser[poll.Owner] = make([]Poll, 1)
-	}
-	pollsByUser[poll.Owner] = append(pollsByUser[poll.Owner], poll)
-
-	return poll
-}
-
-//UpdatePoll ...
-func UpdatePoll(poll Poll) Poll {
-	log.Println("Updating Poll", poll)
-	polls[poll.ID] = poll
-
-	return poll
+	return pollStore.Save(poll)
 }
 
 //FindPollById ...
-func FindPollById(id kallax.ULID) Poll {
-	return polls[id]
+func FindPollById(id kallax.ULID) (*Poll, error) {
+	query := NewPollQuery().FindByID(id)
+	return pollStore.FindOne(query)
 }
 
 //SaveVote ...
 func SaveVote(vote PollVote) PollVote {
 	log.Println("Registering vote", vote)
-	pollMap, pollVoted := votes[vote.PollID]
 
-	if !pollVoted {
-		pollMap = make(map[string][]PollVote)
-		pollVotedByUser[vote.PollID] = make(map[kallax.ULID]bool)
-		votes[vote.PollID] = pollMap
-	}
-
-	_, optionChosen := pollMap[vote.ChosenOption]
-
-	if !optionChosen {
-		pollMap[vote.ChosenOption] = make([]PollVote, 0)
-	}
-
-	pollMap[vote.ChosenOption] = append(pollMap[vote.ChosenOption], vote)
-	pollVotedByUser[vote.PollID][vote.UserID] = true
+	pollVoteStore.Save(&vote)
 
 	return vote
 }
 
 //PollAlreadyVotedByUser ...
-func PollAlreadyVotedByUser(pollID, userID kallax.ULID) bool {
-	_, exists := pollVotedByUser[pollID][userID]
+func PollAlreadyVotedByUser(pollID, userID kallax.ULID) (bool, error) {
+	query := NewPollVoteQuery().
+		FindByPollID(pollID).
+		FindByUserID(userID)
 
-	return exists
+	count, err := pollVoteStore.Count(query)
+
+	return count > 0, err
 }
 
 //ExistsOption ...
-func ExistsOption(pollID kallax.ULID, candidate string) bool {
-	poll := FindPollById(pollID)
+func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
+	poll, err := FindPollById(pollID)
+
+	log.Println("Poll", poll)
+	if err != nil {
+		return false, err
+	}
 
 	for _, opt := range poll.Options {
 		if opt.Content == candidate {
-			return true
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 //CreateUser ...
@@ -171,7 +147,7 @@ func IsAnon(u User) bool {
 //Visit ...
 func Visit(w http.ResponseWriter, r *http.Request) {
 	user := CreateAnonUser()
-	session := CreateSession(user)
+	session := CreateSession(&user)
 	json.NewEncoder(w).Encode(session)
 }
 
@@ -203,47 +179,48 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 //Authenticate ...
-func Authenticate(data LoginData) (Session, error) {
+func Authenticate(data LoginData) (*Session, error) {
 	log.Println("Trying authenticate", data)
-	userID, ok := FindUserByLogin(data.Login)
+	user, errFindUser := FindUserByLogin(data.Login)
 
-	log.Println("Result ID", userID, ok)
-	if !ok {
-		return Session{}, ErrUserNotFound{Login: data.Login}
+	if errFindUser != nil {
+		return nil, errFindUser
 	}
 
-	user := FindUserById(userID)
 	log.Println("Result User", user)
 
 	return CreateSession(user), nil
 }
 
 //CreateSession ...
-func CreateSession(u User) Session {
-	return SaveSession(Session{
+func CreateSession(u *User) *Session {
+	session := Session{
 		ID:     kallax.NewULID(),
 		UserID: u.ID,
-	})
+	}
+	SaveSession(session)
+
+	return &session
 }
 
 //StartCreatePoll ...
 func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
 		var data CreatePollData
 		mapstructure.Decode(protoData, &data)
 
-		return SavePoll(Poll{
+		return SavePoll(&Poll{
 			ID:      kallax.NewULID(),
 			Name:    data.Name,
 			Options: make([]*PollOption, 0),
 			Owner:   session.UserID,
-		}), nil
+		})
 	})
 }
 
 //AddOption ...
 func AddOption(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
 		return ChangePollOrCry(w, r, session, func(poll *Poll) {
 			var data AddOptionData
 			mapstructure.Decode(protoData, &data)
@@ -259,7 +236,7 @@ func AddOption(w http.ResponseWriter, r *http.Request) {
 
 //RemoveOption ...
 func RemoveOption(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
 		return ChangePollOrCry(w, r, session, func(poll *Poll) {
 			var data RemoveOptionData
 			mapstructure.Decode(protoData, &data)
@@ -276,7 +253,7 @@ func RemoveOption(w http.ResponseWriter, r *http.Request) {
 
 //Publish ...
 func Publish(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session Session, protoData interface{}) (interface{}, error) {
+	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
 		return ChangePollOrCry(w, r, session, func(poll *Poll) {
 			poll.Published = true
 		})
@@ -284,26 +261,30 @@ func Publish(w http.ResponseWriter, r *http.Request) {
 }
 
 //ChangePollOrCry ...
-func ChangePollOrCry(w http.ResponseWriter, r *http.Request, session Session, fChange func(aPoll *Poll)) (Poll, error) {
+func ChangePollOrCry(w http.ResponseWriter, r *http.Request, session *Session, fChange func(aPoll *Poll)) (bool, error) {
 	vars := mux.Vars(r)
 	id, err := kallax.NewULIDFromText(vars["id"])
 	if err != nil {
-		return Poll{}, ErrNotChangePoll(err.Error())
+		return false, ErrNotChangePoll(err.Error())
 	}
 
-	poll := FindPollById(id)
+	poll, errFind := FindPollById(id)
+
+	if errFind != nil {
+		http.Error(w, errFind.Error(), http.StatusBadRequest)
+	}
 
 	if poll.Published {
-		return Poll{}, ErrNotChangePoll("Can't change a published poll.")
+		return false, ErrNotChangePoll("Can't change a published poll.")
 	}
 
 	if poll.Owner != session.UserID {
-		return Poll{}, ErrNotChangePoll("Can't change a poll from other user.")
+		return false, ErrNotChangePoll("Can't change a poll from other user.")
 	}
 
-	fChange(&poll)
+	fChange(poll)
 
-	return UpdatePoll(poll), nil
+	return SavePoll(poll)
 }
 
 //CreateVote ...
@@ -323,13 +304,27 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 	var data PollVoteData
 	_ = json.NewDecoder(r.Body).Decode(&data)
 
-	if !ExistsOption(pollID, data.Value) {
+	exists, err := ExistsOption(pollID, data.Value)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+
+	if !exists {
 		message := fmt.Sprintf("There is no option %s for vote on this poll.", data.Value)
 		http.Error(w, message, http.StatusConflict)
 		return
 	}
 
-	if PollAlreadyVotedByUser(pollID, session.UserID) {
+	voted, errVoted := PollAlreadyVotedByUser(pollID, session.UserID)
+
+	if errVoted != nil {
+		http.Error(w, errVoted.Error(), http.StatusConflict)
+		return
+	}
+
+	if voted {
 		message := fmt.Sprintf("You already voted in this poll.")
 		http.Error(w, message, http.StatusConflict)
 		return
@@ -354,18 +349,33 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 
 //CountVotes ...
 func CountVotes(pollID kallax.ULID) map[string]float64 {
-	poll := FindPollById(pollID)
-	pollMap := votes[pollID]
+	poll, _ := FindPollById(pollID)
 
-	total := TotalVotes(pollID)
+	count := make(map[string]int64)
+
+	for _, opt := range poll.Options {
+		query := NewPollVoteQuery().FindByPollID(pollID).FindByChosenOption(opt.Content)
+		votesOption, err := pollVoteStore.Count(query)
+		if err != nil {
+			count[opt.Content] = 0
+		} else {
+			count[opt.Content] = votesOption
+		}
+	}
+
+	total := int64(0)
+
+	for _, votes := range count {
+		total += votes
+	}
+
 	result := make(map[string]float64)
 	result["total"] = float64(total)
 
 	for _, opt := range poll.Options {
-		list, ok := pollMap[opt.Content]
+		countVote, ok := count[opt.Content]
 
 		if ok {
-			countVote := len(list)
 			perct := float64(countVote*100) / float64(total)
 			result[opt.Content] = math.Round(perct*100) / 100
 		} else {
@@ -376,34 +386,29 @@ func CountVotes(pollID kallax.ULID) map[string]float64 {
 	return result
 }
 
-//TotalVotes ...
-func TotalVotes(pollID kallax.ULID) int {
-	sum := 0
-
-	for _, list := range votes[pollID] {
-		sum += len(list)
-	}
-
-	return sum
-}
-
 //GetPoll ...
 func GetPoll(w http.ResponseWriter, r *http.Request) {
-	ExecuteSessioned(w, r, func(session Session) interface{} {
+	ExecuteSessioned(w, r, func(session *Session) interface{} {
 		vars := mux.Vars(r)
 		id, err := kallax.NewULIDFromText(vars["id"])
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return Poll{}
+			return nil
 		}
 
-		return FindPollById(id)
+		poll, errFind := FindPollById(id)
+		if errFind != nil {
+			http.Error(w, errFind.Error(), http.StatusBadRequest)
+			return nil
+		}
+
+		return poll
 	})
 }
 
 //CountingPollVotes ...
 func CountingPollVotes(w http.ResponseWriter, r *http.Request) {
-	ExecuteSessioned(w, r, func(session Session) interface{} {
+	ExecuteSessioned(w, r, func(session *Session) interface{} {
 		vars := mux.Vars(r)
 		id, err := kallax.NewULIDFromText(vars["id"])
 		if err != nil {
@@ -416,42 +421,39 @@ func CountingPollVotes(w http.ResponseWriter, r *http.Request) {
 
 //GetPolls ...
 func GetPolls(w http.ResponseWriter, r *http.Request) {
-	ExecuteSessioned(w, r, func(session Session) interface{} {
+	ExecuteSessioned(w, r, func(session *Session) interface{} {
 		log.Println("Getting all")
-		pollsSorted := make([]Poll, 0)
-		for _, poll := range polls {
-			pollsSorted = append(pollsSorted, poll)
-		}
-
-		return SortPolls(pollsSorted)
+		query := NewPollQuery().
+			Order(kallax.Asc(Schema.Poll.CreatedAt))
+		return FindPolls(w, query)
 	})
 }
 
 //GetPollsMine ...
 func GetPollsMine(w http.ResponseWriter, r *http.Request) {
-	ExecuteSessioned(w, r, func(session Session) interface{} {
-		pollsMineSorted := make([]Poll, 0)
-		for _, poll := range polls {
-			if poll.Owner == session.UserID {
-				pollsMineSorted = append(pollsMineSorted, poll)
-			}
-		}
+	ExecuteSessioned(w, r, func(session *Session) interface{} {
+		query := NewPollQuery().
+			FindByOwner(session.UserID).
+			Order(kallax.Asc(Schema.Poll.CreatedAt))
 
-		return SortPolls(pollsMineSorted)
+		return FindPolls(w, query)
 	})
 }
 
-//SortPolls ...
-func SortPolls(polls []Poll) []Poll {
-	sort.Slice(polls, func(i, j int) bool {
-		return polls[i].CreatedAt.Before(polls[j].CreatedAt)
-	})
+// FindPolls
+func FindPolls(w http.ResponseWriter, query *PollQuery) []*Poll {
+	polls, err := pollStore.FindAll(query)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil
+	}
 
 	return polls
 }
 
 //ExecuteSessioned ...
-func ExecuteSessioned(w http.ResponseWriter, r *http.Request, f func(session Session) interface{}) {
+func ExecuteSessioned(w http.ResponseWriter, r *http.Request, f func(session *Session) interface{}) {
 	session, err := CheckSession(w, r)
 
 	if err != nil {
@@ -487,42 +489,40 @@ func ExecuteAuthenticated(w http.ResponseWriter, r *http.Request, f Authenticate
 }
 
 //CheckAuthentication ...
-func CheckAuthentication(w http.ResponseWriter, r *http.Request) (Session, error) {
-	session, error := CheckSession(w, r)
+func CheckAuthentication(w http.ResponseWriter, r *http.Request) (*Session, error) {
+	session, errCheck := CheckSession(w, r)
 
-	if error != nil {
-		return session, error
+	if errCheck != nil {
+		return nil, errCheck
 	}
 
-	user := FindUserById(session.UserID)
+	user, errUser := FindUserById(session.UserID)
+
+	if errUser != nil {
+		return nil, errUser
+	}
 
 	if user.Password == "" {
-		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
+		return nil, ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
 	}
 
 	return session, nil
 }
 
 //CheckSession ...
-func CheckSession(w http.ResponseWriter, r *http.Request) (Session, error) {
+func CheckSession(w http.ResponseWriter, r *http.Request) (*Session, error) {
 	sessionID := r.Header.Get("sessionId")
 
 	if sessionID == "" {
-		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Missing value.")
+		return nil, ErrUserNotLogged("Must be logged to perform this action. Missing value.")
 	}
 
 	ID, err := kallax.NewULIDFromText(sessionID)
 	if err != nil {
-		return Session{}, err
+		return nil, err
 	}
 
-	session, ok := FindSessionById(ID)
-
-	if !ok {
-		return Session{}, ErrUserNotLogged("Must be logged to perform this action. Session invalid.")
-	}
-
-	return session, nil
+	return FindSessionById(ID)
 }
 
 //ConnectToDatabase ...
@@ -535,6 +535,9 @@ func ConnectToDatabase() {
 	}
 
 	userStore = NewUserStore(db)
+	sessionStore = NewSessionStore(db)
+	pollStore = NewPollStore(db)
+	pollVoteStore = NewPollVoteStore(db)
 
 	log.Println("Successfuly connected!")
 }
