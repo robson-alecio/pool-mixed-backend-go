@@ -30,7 +30,7 @@ type Poll struct {
 	kallax.Timestamps
 	ID        kallax.ULID `pk:""`
 	Name      string
-	Options   []*PollOption `fk:"poll_id"`
+	Options   []*PollOption
 	Owner     kallax.ULID
 	Published bool
 }

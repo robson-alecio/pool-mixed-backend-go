@@ -327,7 +327,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n\t\"value\": 0\n}"
+					"raw": "{\n\t\"value\": \"01672f32-ea2f-d9bc-db0e-047b2257ebf2\"\n}"
 				},
 				"url": {
 					"raw": "{{host}}/polls/{{pollId}}",
@@ -390,6 +390,31 @@
 			"response": []
 		},
 		{
+			"name": "Get Polls Counting",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "sessionId",
+						"value": "{{sessionId}}"
+					}
+				],
+				"body": {},
+				"url": {
+					"raw": "{{host}}/polls/{{pollId}}/counting",
+					"host": [
+						"{{host}}"
+					],
+					"path": [
+						"polls",
+						"{{pollId}}",
+						"counting"
+					]
+				}
+			},
+			"response": []
+		},
+		{
 			"name": "Get Mine Polls",
 			"request": {
 				"method": "GET",
@@ -438,7 +463,7 @@
 	],
 	"variable": [
 		{
-			"id": "d5457685-68e8-41a7-abe6-e10944be2646",
+			"id": "64e4bdad-c40a-41bb-ba3b-cd0da8650e68",
 			"key": "host",
 			"value": "localhost:8000",
 			"type": "string",

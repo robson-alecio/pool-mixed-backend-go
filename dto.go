@@ -26,7 +26,7 @@ type AddOptionData struct {
 
 //RemoveOptionData ...
 type RemoveOptionData struct {
-	Value int `json:"value,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 //PollVoteData ...

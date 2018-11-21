@@ -14,6 +14,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+// AuthenticatedFunction ...
 type AuthenticatedFunction func(session *Session, data interface{}) (interface{}, error)
 
 /////// Repositories
@@ -21,6 +22,7 @@ var db *sql.DB
 var userStore *UserStore
 var sessionStore *SessionStore
 var pollStore *PollStore
+var pollOptionStore *PollOptionStore
 var pollVoteStore *PollVoteStore
 
 //SaveUser ...
@@ -38,9 +40,9 @@ func FindUserByLogin(login string) (*User, error) {
 	return userStore.FindOne(query)
 }
 
-//FindUserById ...
-func FindUserById(id kallax.ULID) (*User, error) {
-	query := NewUserQuery().FindByID(id)
+//FindUserByID ...
+func FindUserByID(ID kallax.ULID) (*User, error) {
+	query := NewUserQuery().FindByID(ID)
 	return userStore.FindOne(query)
 }
 
@@ -52,8 +54,8 @@ func SaveSession(session Session) Session {
 	return session
 }
 
-//FindSessionById ...
-func FindSessionById(id kallax.ULID) (*Session, error) {
+// FindSessionByID ...
+func FindSessionByID(id kallax.ULID) (*Session, error) {
 	query := NewSessionQuery().FindByID(id)
 	return sessionStore.FindOne(query)
 }
@@ -65,10 +67,51 @@ func SavePoll(poll *Poll) (bool, error) {
 	return pollStore.Save(poll)
 }
 
-//FindPollById ...
-func FindPollById(id kallax.ULID) (*Poll, error) {
-	query := NewPollQuery().FindByID(id)
-	return pollStore.FindOne(query)
+// SavePollOption ...
+func SavePollOption(pollOption *PollOption) (bool, error) {
+	log.Println("Adding Poll Option", pollOption)
+
+	return pollOptionStore.Save(pollOption)
+}
+
+// DeletePollOption ...
+func DeletePollOption(id kallax.ULID) error {
+	log.Println("Removing Poll Option", id)
+
+	query := NewPollOptionQuery().FindByID(id)
+
+	opt, err := pollOptionStore.FindOne(query)
+
+	if err != nil {
+		return err
+	}
+
+	return pollOptionStore.Delete(opt)
+}
+
+//FindPollByID ...
+func FindPollByID(ID kallax.ULID) (*Poll, error) {
+	query := NewPollQuery().FindByID(ID)
+	poll, err := pollStore.FindOne(query)
+
+	if err != nil {
+		return poll, err
+	}
+
+	options, errOption := FindPollOptions(ID)
+	if errOption != nil {
+		return poll, errOption
+	}
+
+	poll.Options = options
+
+	return poll, nil
+}
+
+// FindPollOptions ...
+func FindPollOptions(id kallax.ULID) ([]*PollOption, error) {
+	query := NewPollOptionQuery().FindByOwner(id)
+	return pollOptionStore.FindAll(query)
 }
 
 //SaveVote ...
@@ -93,20 +136,17 @@ func PollAlreadyVotedByUser(pollID, userID kallax.ULID) (bool, error) {
 
 //ExistsOption ...
 func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
-	poll, err := FindPollById(pollID)
+	query := NewPollOptionQuery().
+		FindByOwner(pollID).
+		FindByContent(candidate)
 
-	log.Println("Poll", poll)
+	count, err := pollOptionStore.Count(query)
+
 	if err != nil {
 		return false, err
 	}
 
-	for _, opt := range poll.Options {
-		if opt.Content == candidate {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return count > 0, nil
 }
 
 //CreateUser ...
@@ -225,7 +265,7 @@ func AddOption(w http.ResponseWriter, r *http.Request) {
 			var data AddOptionData
 			mapstructure.Decode(protoData, &data)
 
-			poll.Options = append(poll.Options, &PollOption{
+			SavePollOption(&PollOption{
 				ID:      kallax.NewULID(),
 				Owner:   poll,
 				Content: data.Value,
@@ -241,12 +281,14 @@ func RemoveOption(w http.ResponseWriter, r *http.Request) {
 			var data RemoveOptionData
 			mapstructure.Decode(protoData, &data)
 
-			before := poll.Options[:data.Value]
-			after := poll.Options[data.Value+1:]
-			poll.Options = before
-			for _, v := range after {
-				poll.Options = append(poll.Options, v)
+			id, err := kallax.NewULIDFromText(data.Value)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
+
+			DeletePollOption(id)
 		})
 	})
 }
@@ -268,7 +310,7 @@ func ChangePollOrCry(w http.ResponseWriter, r *http.Request, session *Session, f
 		return false, ErrNotChangePoll(err.Error())
 	}
 
-	poll, errFind := FindPollById(id)
+	poll, errFind := FindPollByID(id)
 
 	if errFind != nil {
 		http.Error(w, errFind.Error(), http.StatusBadRequest)
@@ -349,11 +391,17 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 
 //CountVotes ...
 func CountVotes(pollID kallax.ULID) map[string]float64 {
-	poll, _ := FindPollById(pollID)
+	options, err := FindPollOptions(pollID)
+
+	if err != nil {
+		badResult := make(map[string]float64)
+		badResult[err.Error()] = -1.0
+		return badResult
+	}
 
 	count := make(map[string]int64)
 
-	for _, opt := range poll.Options {
+	for _, opt := range options {
 		query := NewPollVoteQuery().FindByPollID(pollID).FindByChosenOption(opt.Content)
 		votesOption, err := pollVoteStore.Count(query)
 		if err != nil {
@@ -372,7 +420,7 @@ func CountVotes(pollID kallax.ULID) map[string]float64 {
 	result := make(map[string]float64)
 	result["total"] = float64(total)
 
-	for _, opt := range poll.Options {
+	for _, opt := range options {
 		countVote, ok := count[opt.Content]
 
 		if ok {
@@ -396,7 +444,7 @@ func GetPoll(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		poll, errFind := FindPollById(id)
+		poll, errFind := FindPollByID(id)
 		if errFind != nil {
 			http.Error(w, errFind.Error(), http.StatusBadRequest)
 			return nil
@@ -440,7 +488,7 @@ func GetPollsMine(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// FindPolls
+// FindPolls ...
 func FindPolls(w http.ResponseWriter, query *PollQuery) []*Poll {
 	polls, err := pollStore.FindAll(query)
 
@@ -496,7 +544,7 @@ func CheckAuthentication(w http.ResponseWriter, r *http.Request) (*Session, erro
 		return nil, errCheck
 	}
 
-	user, errUser := FindUserById(session.UserID)
+	user, errUser := FindUserByID(session.UserID)
 
 	if errUser != nil {
 		return nil, errUser
@@ -522,7 +570,7 @@ func CheckSession(w http.ResponseWriter, r *http.Request) (*Session, error) {
 		return nil, err
 	}
 
-	return FindSessionById(ID)
+	return FindSessionByID(ID)
 }
 
 //ConnectToDatabase ...
@@ -537,11 +585,13 @@ func ConnectToDatabase() {
 	userStore = NewUserStore(db)
 	sessionStore = NewSessionStore(db)
 	pollStore = NewPollStore(db)
+	pollOptionStore = NewPollOptionStore(db)
 	pollVoteStore = NewPollVoteStore(db)
 
 	log.Println("Successfuly connected!")
 }
 
+// ConfigStartServer ...
 func ConfigStartServer() {
 	router := mux.NewRouter()
 	router.HandleFunc("/users", CreateUser).Methods("POST")
@@ -568,3 +618,10 @@ func main() {
 	ConnectToDatabase()
 	ConfigStartServer()
 }
+
+// TODOs (Improvements)
+// Sessions to expires
+// Sessions efemerals
+// Endpoint for published polls
+// Poll DTO for GETs
+// Split files by packages
