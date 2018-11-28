@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"gopkg.in/src-d/go-kallax.v1"

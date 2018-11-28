@@ -1,4 +1,4 @@
-package main
+package app
 
 //UserCreationData ...
 type UserCreationData struct {

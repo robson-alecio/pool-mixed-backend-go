@@ -12,6 +12,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/mitchellh/mapstructure"
+
+	. "github/RobsonAlecio/pool-mixed-backend-go/app"
 )
 
 // AuthenticatedFunction ...
@@ -149,8 +151,8 @@ func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
 	return count > 0, nil
 }
 
-//CreateUser ...
-func CreateUser(w http.ResponseWriter, r *http.Request) {
+//CreateUserEndpointEntry ...
+func CreateUserEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	var data UserCreationData
 	_ = json.NewDecoder(r.Body).Decode(&data)
 	user, err := CreateUserFromData(data)
@@ -162,6 +164,24 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	SaveUser(user)
 	json.NewEncoder(w).Encode(user)
+}
+
+type ProcessingBlock func(v interface{}) (interface{}, error)
+
+type HttpHelper interface {
+	Process(v interface{}, blocks ...ProcessingBlock)
+}
+
+func CreateUser(helper HttpHelper) {
+	var createUser = func(v interface{}) (interface{}, error) {
+		return CreateUserFromData(v.(UserCreationData))
+	}
+
+	var saveUser = func(v interface{}) (interface{}, error) {
+		return SaveUser(v.(User)), nil
+	}
+
+	helper.Process(&UserCreationData{}, createUser, saveUser)
 }
 
 //CreateUserFromData ...
@@ -594,7 +614,7 @@ func ConnectToDatabase() {
 // ConfigStartServer ...
 func ConfigStartServer() {
 	router := mux.NewRouter()
-	router.HandleFunc("/users", CreateUser).Methods("POST")
+	router.HandleFunc("/users", CreateUserEndpointEntry).Methods("POST")
 
 	router.HandleFunc("/visit", Visit).Methods("POST")
 	router.HandleFunc("/login", Login).Methods("POST")
