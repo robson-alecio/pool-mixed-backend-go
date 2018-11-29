@@ -4,7 +4,7 @@ import (
 	"gopkg.in/src-d/go-kallax.v1"
 )
 
-//go:generate kallax gen -e main.go
+//go:generate kallax gen -e main.go -e persistence.go -e bis.go
 
 //User ...
 type User struct {

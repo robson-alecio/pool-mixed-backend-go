@@ -21,32 +21,11 @@ type AuthenticatedFunction func(session *Session, data interface{}) (interface{}
 
 /////// Repositories
 var db *sql.DB
-var userStore *UserStore
+var userHandler *UserHandlerImpl
 var sessionStore *SessionStore
 var pollStore *PollStore
 var pollOptionStore *PollOptionStore
 var pollVoteStore *PollVoteStore
-
-//SaveUser ...
-func SaveUser(user User) User {
-	log.Println("Saving User", user)
-
-	userStore.Save(&user)
-
-	return user
-}
-
-//FindUserByLogin ...
-func FindUserByLogin(login string) (*User, error) {
-	query := NewUserQuery().FindByLogin(login)
-	return userStore.FindOne(query)
-}
-
-//FindUserByID ...
-func FindUserByID(ID kallax.ULID) (*User, error) {
-	query := NewUserQuery().FindByID(ID)
-	return userStore.FindOne(query)
-}
 
 //SaveSession ...
 func SaveSession(session Session) Session {
@@ -153,75 +132,17 @@ func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
 
 //CreateUserEndpointEntry ...
 func CreateUserEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	var data UserCreationData
-	_ = json.NewDecoder(r.Body).Decode(&data)
-	user, err := CreateUserFromData(data)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	SaveUser(user)
-	json.NewEncoder(w).Encode(user)
-}
-
-type ProcessingBlock func(v interface{}) (interface{}, error)
-
-type HttpHelper interface {
-	Process(v interface{}, blocks ...ProcessingBlock)
-}
-
-func CreateUser(helper HttpHelper) {
-	var createUser = func(v interface{}) (interface{}, error) {
-		return CreateUserFromData(v.(UserCreationData))
-	}
-
-	var saveUser = func(v interface{}) (interface{}, error) {
-		return SaveUser(v.(User)), nil
-	}
-
-	helper.Process(&UserCreationData{}, createUser, saveUser)
-}
-
-//CreateUserFromData ...
-func CreateUserFromData(d UserCreationData) (User, error) {
-	if d.Password != d.PasswordConfirm {
-		return User{}, ErrPasswordDoNotMatch("Passwords don't match")
-	}
-
-	user := User{
-		ID:       kallax.NewULID(),
-		Login:    d.Login,
-		Name:     d.Name,
-		Password: d.Password,
-	}
-	return user, nil
-}
-
-//IsAnon ...
-func IsAnon(u User) bool {
-	return u.Password == ""
+	CreateUser(HTTPHelperImpl{
+		Request:        r,
+		ResponseWriter: w,
+	}, userHandler)
 }
 
 //Visit ...
 func Visit(w http.ResponseWriter, r *http.Request) {
-	user := CreateAnonUser()
+	user := userHandler.CreateAnonUser()
 	session := CreateSession(&user)
 	json.NewEncoder(w).Encode(session)
-}
-
-//CreateAnonUser ...
-func CreateAnonUser() User {
-	user := User{
-		ID: kallax.NewULID(),
-	}
-	user.Name = "Anon" + user.ID.String()
-	user.Login = user.Name
-
-	SaveUser(user)
-
-	return user
 }
 
 //Login ...
@@ -241,7 +162,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 //Authenticate ...
 func Authenticate(data LoginData) (*Session, error) {
 	log.Println("Trying authenticate", data)
-	user, errFindUser := FindUserByLogin(data.Login)
+	user, errFindUser := userHandler.FindUserByLogin(data.Login)
 
 	if errFindUser != nil {
 		return nil, errFindUser
@@ -564,7 +485,7 @@ func CheckAuthentication(w http.ResponseWriter, r *http.Request) (*Session, erro
 		return nil, errCheck
 	}
 
-	user, errUser := FindUserByID(session.UserID)
+	user, errUser := userHandler.FindUserByID(session.UserID)
 
 	if errUser != nil {
 		return nil, errUser
@@ -602,7 +523,9 @@ func ConnectToDatabase() {
 		panic(err)
 	}
 
-	userStore = NewUserStore(db)
+	userHandler = &UserHandlerImpl{
+		Store: NewUserStore(db),
+	}
 	sessionStore = NewSessionStore(db)
 	pollStore = NewPollStore(db)
 	pollOptionStore = NewPollOptionStore(db)
