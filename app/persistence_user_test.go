@@ -59,7 +59,7 @@ func TestSave(t *testing.T) {
 	savedUser := handler.SaveUser(user)
 
 	assert.AssertEqual(t, user, savedUser)
-	assert.AssertEqual(t, 1, userStoreMock.SaveCalls())
+	assert.AssertEqual(t, 1, len(userStoreMock.SaveCalls()))
 }
 
 func TestFindUserByLogin(t *testing.T) {

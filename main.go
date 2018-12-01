@@ -138,8 +138,8 @@ func CreateUserEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	}, userHandler)
 }
 
-//Visit ...
-func Visit(w http.ResponseWriter, r *http.Request) {
+//VisitEndpointEntry ...
+func VisitEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	user := userHandler.CreateAnonUser()
 	session := CreateSession(&user)
 	json.NewEncoder(w).Encode(session)
@@ -539,7 +539,7 @@ func ConfigStartServer() {
 	router := mux.NewRouter()
 	router.HandleFunc("/users", CreateUserEndpointEntry).Methods("POST")
 
-	router.HandleFunc("/visit", Visit).Methods("POST")
+	router.HandleFunc("/visit", VisitEndpointEntry).Methods("POST")
 	router.HandleFunc("/login", Login).Methods("POST")
 
 	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
