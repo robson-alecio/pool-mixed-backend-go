@@ -4,7 +4,7 @@ import (
 	"gopkg.in/src-d/go-kallax.v1"
 )
 
-//go:generate kallax gen -e main.go -e persistence.go -e bis.go
+//go:generate kallax gen -e main.go -e persistence_user.go -e persistence_session.go -e bis.go
 
 //User ...
 type User struct {
@@ -35,7 +35,7 @@ type Poll struct {
 	Published bool
 }
 
-// PollOption
+// PollOption ...
 type PollOption struct {
 	kallax.Model
 	ID      kallax.ULID `pk:""`

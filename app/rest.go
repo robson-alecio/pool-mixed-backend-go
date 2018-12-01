@@ -21,7 +21,7 @@ type HTTPHelperImpl struct {
 }
 
 //Process ...
-func (h HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
+func (h *HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 	err := json.NewDecoder(h.Request.Body).Decode(&v)
 
 	if err != nil {
