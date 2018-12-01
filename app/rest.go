@@ -20,6 +20,14 @@ type HTTPHelperImpl struct {
 	Request        *http.Request
 }
 
+//NewHTTPHelper ...
+func NewHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelper {
+	return HTTPHelperImpl{
+		Request:        r,
+		ResponseWriter: w,
+	}
+}
+
 //Process ...
 func (h HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 	err := json.NewDecoder(h.Request.Body).Decode(&v)

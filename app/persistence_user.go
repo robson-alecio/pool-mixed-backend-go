@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"log"
 
 	kallax "gopkg.in/src-d/go-kallax.v1"
@@ -26,6 +27,13 @@ type IUserStore interface {
 //UserHandlerImpl ...
 type UserHandlerImpl struct {
 	Store IUserStore
+}
+
+//NewUserHandler ...
+func NewUserHandler(db *sql.DB) *UserHandlerImpl {
+	return &UserHandlerImpl{
+		Store: NewUserStore(db),
+	}
 }
 
 //CreateUserFromData ...

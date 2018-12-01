@@ -1,8 +1,11 @@
 package app
 
 import (
-	"fmt"
 	"testing"
+
+	"gopkg.in/src-d/go-kallax.v1"
+
+	"github.com/chai2010/assert"
 )
 
 func HelperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
@@ -18,57 +21,44 @@ func HelperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 }
 
 func TestCreateUser(t *testing.T) {
-	var userCreated bool
-	var userSaved bool
-
 	helperMock := &HTTPHelperMock{
 		ProcessFunc: HelperMockProcessFunc,
 	}
 	handlerMock := &UserHandlerMock{
 		CreateUserFromDataFunc: func(d *UserCreationData) (User, error) {
-			userCreated = true
 			return User{}, nil
 		},
 		SaveUserFunc: func(user User) User {
-			userSaved = true
 			return user
 		},
 	}
 
 	CreateUser(helperMock, handlerMock)
 
-	if !userCreated {
-		t.Error("User was not created.")
-	}
-	if !userSaved {
-		t.Error("User was not saved.")
-	}
+	assert.AssertEqual(t, 1, len(handlerMock.CreateUserFromDataCalls()))
+	assert.AssertEqual(t, 1, len(handlerMock.SaveUserCalls()))
 }
 
-func TestCreateButDontSaveUser(t *testing.T) {
-	var userCreated bool
-	var userSaved bool
-
+func TestVisit(t *testing.T) {
 	helperMock := &HTTPHelperMock{
 		ProcessFunc: HelperMockProcessFunc,
 	}
-	handlerMock := &UserHandlerMock{
-		CreateUserFromDataFunc: func(d *UserCreationData) (User, error) {
-			userCreated = true
-			return User{}, fmt.Errorf("I don't wanna save")
-		},
-		SaveUserFunc: func(user User) User {
-			userSaved = true
-			return user
+	userHandlerMock := &UserHandlerMock{
+		CreateAnonUserFunc: func() User {
+			return User{
+				ID: kallax.NewULID(),
+			}
 		},
 	}
 
-	CreateUser(helperMock, handlerMock)
+	sessionHandlerMock := &SessionHandlerMock{
+		CreateSessionFunc: func(ID kallax.ULID) *Session {
+			return &Session{}
+		},
+	}
 
-	if !userCreated {
-		t.Error("User was not created.")
-	}
-	if userSaved {
-		t.Error("User SHOULD NOT be saved.")
-	}
+	Visit(helperMock, userHandlerMock, sessionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(userHandlerMock.CreateAnonUserCalls()))
+	assert.AssertEqual(t, 1, len(sessionHandlerMock.CreateSessionCalls()))
 }

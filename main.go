@@ -22,24 +22,10 @@ type AuthenticatedFunction func(session *Session, data interface{}) (interface{}
 /////// Repositories
 var db *sql.DB
 var userHandler *UserHandlerImpl
-var sessionStore *SessionStore
+var sessionHandler *SessionHandlerImpl
 var pollStore *PollStore
 var pollOptionStore *PollOptionStore
 var pollVoteStore *PollVoteStore
-
-//SaveSession ...
-func SaveSession(session Session) Session {
-	log.Println("Saving Session", session)
-
-	sessionStore.Save(&session)
-	return session
-}
-
-// FindSessionByID ...
-func FindSessionByID(id kallax.ULID) (*Session, error) {
-	query := NewSessionQuery().FindByID(id)
-	return sessionStore.FindOne(query)
-}
 
 //SavePoll ...
 func SavePoll(poll *Poll) (bool, error) {
@@ -132,17 +118,12 @@ func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
 
 //CreateUserEndpointEntry ...
 func CreateUserEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	CreateUser(HTTPHelperImpl{
-		Request:        r,
-		ResponseWriter: w,
-	}, userHandler)
+	CreateUser(NewHTTPHelper(w, r), userHandler)
 }
 
 //VisitEndpointEntry ...
 func VisitEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	user := userHandler.CreateAnonUser()
-	session := CreateSession(&user)
-	json.NewEncoder(w).Encode(session)
+	Visit(NewHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
 //Login ...
@@ -170,18 +151,7 @@ func Authenticate(data LoginData) (*Session, error) {
 
 	log.Println("Result User", user)
 
-	return CreateSession(user), nil
-}
-
-//CreateSession ...
-func CreateSession(u *User) *Session {
-	session := Session{
-		ID:     kallax.NewULID(),
-		UserID: u.ID,
-	}
-	SaveSession(session)
-
-	return &session
+	return sessionHandler.CreateSession(user), nil
 }
 
 //StartCreatePoll ...
@@ -511,7 +481,7 @@ func CheckSession(w http.ResponseWriter, r *http.Request) (*Session, error) {
 		return nil, err
 	}
 
-	return FindSessionByID(ID)
+	return sessionHandler.FindSessionByID(ID)
 }
 
 //ConnectToDatabase ...
@@ -523,10 +493,8 @@ func ConnectToDatabase() {
 		panic(err)
 	}
 
-	userHandler = &UserHandlerImpl{
-		Store: NewUserStore(db),
-	}
-	sessionStore = NewSessionStore(db)
+	userHandler = NewUserHandler(db)
+	sessionHandler = NewSessionHandler(db)
 	pollStore = NewPollStore(db)
 	pollOptionStore = NewPollOptionStore(db)
 	pollVoteStore = NewPollVoteStore(db)
