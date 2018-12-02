@@ -126,32 +126,9 @@ func VisitEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	Visit(NewHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
-//Login ...
-func Login(w http.ResponseWriter, r *http.Request) {
-	var data LoginData
-	_ = json.NewDecoder(r.Body).Decode(&data)
-	session, err := Authenticate(data)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	json.NewEncoder(w).Encode(session)
-}
-
-//Authenticate ...
-func Authenticate(data LoginData) (*Session, error) {
-	log.Println("Trying authenticate", data)
-	user, errFindUser := userHandler.FindUserByLogin(data.Login)
-
-	if errFindUser != nil {
-		return nil, errFindUser
-	}
-
-	log.Println("Result User", user)
-
-	return sessionHandler.CreateSession(user), nil
+//LoginEndpointEntry ...
+func LoginEndpointEntry(w http.ResponseWriter, r *http.Request) {
+	Login(NewHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
 //StartCreatePoll ...
@@ -508,7 +485,7 @@ func ConfigStartServer() {
 	router.HandleFunc("/users", CreateUserEndpointEntry).Methods("POST")
 
 	router.HandleFunc("/visit", VisitEndpointEntry).Methods("POST")
-	router.HandleFunc("/login", Login).Methods("POST")
+	router.HandleFunc("/login", LoginEndpointEntry).Methods("POST")
 
 	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
 	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
@@ -536,3 +513,4 @@ func main() {
 // Endpoint for published polls
 // Poll DTO for GETs
 // Split files by packages
+// Encrypt password

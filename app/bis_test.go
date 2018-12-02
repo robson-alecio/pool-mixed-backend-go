@@ -62,3 +62,27 @@ func TestVisit(t *testing.T) {
 	assert.AssertEqual(t, 1, len(userHandlerMock.CreateAnonUserCalls()))
 	assert.AssertEqual(t, 1, len(sessionHandlerMock.CreateSessionCalls()))
 }
+
+func TestLogin(t *testing.T) {
+	helperMock := &HTTPHelperMock{
+		ProcessFunc: HelperMockProcessFunc,
+	}
+	userHandlerMock := &UserHandlerMock{
+		FindUserByLoginAndPasswordFunc: func(login, password string) (*User, error) {
+			return &User{
+				ID: kallax.NewULID(),
+			}, nil
+		},
+	}
+
+	sessionHandlerMock := &SessionHandlerMock{
+		CreateSessionFunc: func(ID kallax.ULID) *Session {
+			return &Session{}
+		},
+	}
+
+	Login(helperMock, userHandlerMock, sessionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(userHandlerMock.FindUserByLoginAndPasswordCalls()))
+	assert.AssertEqual(t, 1, len(sessionHandlerMock.CreateSessionCalls()))
+}

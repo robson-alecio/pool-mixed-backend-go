@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	kallax "gopkg.in/src-d/go-kallax.v1"
@@ -15,6 +16,7 @@ type UserHandler interface {
 	FindUserByLogin(login string) (*User, error)
 	FindUserByID(ID kallax.ULID) (*User, error)
 	CreateAnonUser() User
+	FindUserByLoginAndPassword(login, password string) (*User, error)
 }
 
 //IUserStore ...
@@ -83,4 +85,19 @@ func (handler *UserHandlerImpl) CreateAnonUser() User {
 	handler.SaveUser(user)
 
 	return user
+}
+
+//FindUserByLoginAndPassword ...
+func (handler *UserHandlerImpl) FindUserByLoginAndPassword(login, password string) (*User, error) {
+	query := NewUserQuery().
+		FindByLogin(login).
+		FindByPassword(password)
+
+	user, err := handler.Store.FindOne(query)
+
+	if err != nil {
+		return nil, fmt.Errorf("User and password invalid")
+	}
+
+	return user, nil
 }

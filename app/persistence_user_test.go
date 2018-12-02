@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.in/src-d/go-kallax.v1"
@@ -124,4 +125,51 @@ func TestCreateAnonUser(t *testing.T) {
 	assert.AssertTrue(t, saved)
 	assert.AssertNotNil(t, savedUser)
 	assert.AssertMatchString(t, "Anon[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}", savedUser.Login)
+}
+
+func TestFindUserByLoginAndPassword(t *testing.T) {
+	var sqlExecuted string
+
+	userStoreMock := &IUserStoreMock{
+		FindOneFunc: func(q *UserQuery) (*User, error) {
+			sqlExecuted = q.String()
+			return &User{}, nil
+		},
+	}
+	handler := UserHandlerImpl{
+		Store: userStoreMock,
+	}
+
+	result, err := handler.FindUserByLoginAndPassword("chuck.pierce@breakdown.com", "dumb")
+
+	assert.AssertNotNil(t, result)
+	assert.AssertNil(t, err)
+	sql := "SELECT __user.id, __user.created_at, __user.updated_at, __user.login, __user.name, __user.password " +
+		"FROM poll_user __user " +
+		"WHERE __user.login = $1 AND __user.password = $2"
+	assert.AssertEqual(t, sql, sqlExecuted)
+}
+
+func TestNotFindUserByLoginAndPassword(t *testing.T) {
+	var sqlExecuted string
+
+	userStoreMock := &IUserStoreMock{
+		FindOneFunc: func(q *UserQuery) (*User, error) {
+			sqlExecuted = q.String()
+			return nil, fmt.Errorf("Christmas Tree")
+		},
+	}
+	handler := UserHandlerImpl{
+		Store: userStoreMock,
+	}
+
+	result, err := handler.FindUserByLoginAndPassword("chuck.pierce@breakdown.com", "dumb")
+
+	assert.AssertEqual(t, result, nil)
+	assert.AssertNotNil(t, err)
+	assert.AssertEqual(t, err.Error(), "User and password invalid")
+	sql := "SELECT __user.id, __user.created_at, __user.updated_at, __user.login, __user.name, __user.password " +
+		"FROM poll_user __user " +
+		"WHERE __user.login = $1 AND __user.password = $2"
+	assert.AssertEqual(t, sql, sqlExecuted)
 }

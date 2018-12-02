@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	lockUserHandlerMockCreateAnonUser     sync.RWMutex
-	lockUserHandlerMockCreateUserFromData sync.RWMutex
-	lockUserHandlerMockFindUserByID       sync.RWMutex
-	lockUserHandlerMockFindUserByLogin    sync.RWMutex
-	lockUserHandlerMockSaveUser           sync.RWMutex
+	lockUserHandlerMockCreateAnonUser             sync.RWMutex
+	lockUserHandlerMockCreateUserFromData         sync.RWMutex
+	lockUserHandlerMockFindUserByID               sync.RWMutex
+	lockUserHandlerMockFindUserByLogin            sync.RWMutex
+	lockUserHandlerMockFindUserByLoginAndPassword sync.RWMutex
+	lockUserHandlerMockSaveUser                   sync.RWMutex
 )
 
 // UserHandlerMock is a mock implementation of UserHandler.
@@ -33,6 +34,9 @@ var (
 //             },
 //             FindUserByLoginFunc: func(login string) (*User, error) {
 // 	               panic("mock out the FindUserByLogin method")
+//             },
+//             FindUserByLoginAndPasswordFunc: func(login string, password string) (*User, error) {
+// 	               panic("mock out the FindUserByLoginAndPassword method")
 //             },
 //             SaveUserFunc: func(user User) User {
 // 	               panic("mock out the SaveUser method")
@@ -56,6 +60,9 @@ type UserHandlerMock struct {
 	// FindUserByLoginFunc mocks the FindUserByLogin method.
 	FindUserByLoginFunc func(login string) (*User, error)
 
+	// FindUserByLoginAndPasswordFunc mocks the FindUserByLoginAndPassword method.
+	FindUserByLoginAndPasswordFunc func(login string, password string) (*User, error)
+
 	// SaveUserFunc mocks the SaveUser method.
 	SaveUserFunc func(user User) User
 
@@ -78,6 +85,13 @@ type UserHandlerMock struct {
 		FindUserByLogin []struct {
 			// Login is the login argument value.
 			Login string
+		}
+		// FindUserByLoginAndPassword holds details about calls to the FindUserByLoginAndPassword method.
+		FindUserByLoginAndPassword []struct {
+			// Login is the login argument value.
+			Login string
+			// Password is the password argument value.
+			Password string
 		}
 		// SaveUser holds details about calls to the SaveUser method.
 		SaveUser []struct {
@@ -203,6 +217,41 @@ func (mock *UserHandlerMock) FindUserByLoginCalls() []struct {
 	lockUserHandlerMockFindUserByLogin.RLock()
 	calls = mock.calls.FindUserByLogin
 	lockUserHandlerMockFindUserByLogin.RUnlock()
+	return calls
+}
+
+// FindUserByLoginAndPassword calls FindUserByLoginAndPasswordFunc.
+func (mock *UserHandlerMock) FindUserByLoginAndPassword(login string, password string) (*User, error) {
+	if mock.FindUserByLoginAndPasswordFunc == nil {
+		panic("UserHandlerMock.FindUserByLoginAndPasswordFunc: method is nil but UserHandler.FindUserByLoginAndPassword was just called")
+	}
+	callInfo := struct {
+		Login    string
+		Password string
+	}{
+		Login:    login,
+		Password: password,
+	}
+	lockUserHandlerMockFindUserByLoginAndPassword.Lock()
+	mock.calls.FindUserByLoginAndPassword = append(mock.calls.FindUserByLoginAndPassword, callInfo)
+	lockUserHandlerMockFindUserByLoginAndPassword.Unlock()
+	return mock.FindUserByLoginAndPasswordFunc(login, password)
+}
+
+// FindUserByLoginAndPasswordCalls gets all the calls that were made to FindUserByLoginAndPassword.
+// Check the length with:
+//     len(mockedUserHandler.FindUserByLoginAndPasswordCalls())
+func (mock *UserHandlerMock) FindUserByLoginAndPasswordCalls() []struct {
+	Login    string
+	Password string
+} {
+	var calls []struct {
+		Login    string
+		Password string
+	}
+	lockUserHandlerMockFindUserByLoginAndPassword.RLock()
+	calls = mock.calls.FindUserByLoginAndPassword
+	lockUserHandlerMockFindUserByLoginAndPassword.RUnlock()
 	return calls
 }
 

@@ -25,3 +25,17 @@ func Visit(helper HTTPHelper, userHandler UserHandler, sessionHandler SessionHan
 
 	helper.Process(nil, createAnonUser, createSession)
 }
+
+//Login ...
+func Login(helper HTTPHelper, userHandler UserHandler, sessionHandler SessionHandler) {
+	findUser := func(v interface{}) (interface{}, error) {
+		loginData := v.(*LoginData)
+		return userHandler.FindUserByLoginAndPassword(loginData.Login, loginData.Password)
+	}
+
+	createSession := func(v interface{}) (interface{}, error) {
+		return sessionHandler.CreateSession(v.(*User).ID), nil
+	}
+
+	helper.Process(&LoginData{}, findUser, createSession)
+}
