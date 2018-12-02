@@ -24,7 +24,7 @@ func TestCreateUserFromData(t *testing.T) {
 	assert.AssertNil(t, err)
 	assert.AssertEqual(t, "phineas@disney.com", user.Login)
 	assert.AssertEqual(t, "Phineas Flynn", user.Name)
-	assert.AssertEqual(t, "summer", user.Password)
+	assert.AssertEqual(t, "6b1628b016dff46e6fa35684be6acc96", user.Password)
 }
 
 func TestShouldCreateUserWhenPasswordNotConfirmed(t *testing.T) {

@@ -19,7 +19,7 @@ var (
 //
 //         // make and configure a mocked SessionHandler
 //         mockedSessionHandler := &SessionHandlerMock{
-//             CreateSessionFunc: func(userID kallax.ULID) *Session {
+//             CreateSessionFunc: func(userID kallax.ULID, registeredUser bool) *Session {
 // 	               panic("mock out the CreateSession method")
 //             },
 //             SaveSessionFunc: func(session Session) Session {
@@ -33,7 +33,7 @@ var (
 //     }
 type SessionHandlerMock struct {
 	// CreateSessionFunc mocks the CreateSession method.
-	CreateSessionFunc func(userID kallax.ULID) *Session
+	CreateSessionFunc func(userID kallax.ULID, registeredUser bool) *Session
 
 	// SaveSessionFunc mocks the SaveSession method.
 	SaveSessionFunc func(session Session) Session
@@ -44,6 +44,8 @@ type SessionHandlerMock struct {
 		CreateSession []struct {
 			// UserID is the userID argument value.
 			UserID kallax.ULID
+			// RegisteredUser is the registeredUser argument value.
+			RegisteredUser bool
 		}
 		// SaveSession holds details about calls to the SaveSession method.
 		SaveSession []struct {
@@ -54,29 +56,33 @@ type SessionHandlerMock struct {
 }
 
 // CreateSession calls CreateSessionFunc.
-func (mock *SessionHandlerMock) CreateSession(userID kallax.ULID) *Session {
+func (mock *SessionHandlerMock) CreateSession(userID kallax.ULID, registeredUser bool) *Session {
 	if mock.CreateSessionFunc == nil {
 		panic("SessionHandlerMock.CreateSessionFunc: method is nil but SessionHandler.CreateSession was just called")
 	}
 	callInfo := struct {
-		UserID kallax.ULID
+		UserID         kallax.ULID
+		RegisteredUser bool
 	}{
-		UserID: userID,
+		UserID:         userID,
+		RegisteredUser: registeredUser,
 	}
 	lockSessionHandlerMockCreateSession.Lock()
 	mock.calls.CreateSession = append(mock.calls.CreateSession, callInfo)
 	lockSessionHandlerMockCreateSession.Unlock()
-	return mock.CreateSessionFunc(userID)
+	return mock.CreateSessionFunc(userID, registeredUser)
 }
 
 // CreateSessionCalls gets all the calls that were made to CreateSession.
 // Check the length with:
 //     len(mockedSessionHandler.CreateSessionCalls())
 func (mock *SessionHandlerMock) CreateSessionCalls() []struct {
-	UserID kallax.ULID
+	UserID         kallax.ULID
+	RegisteredUser bool
 } {
 	var calls []struct {
-		UserID kallax.ULID
+		UserID         kallax.ULID
+		RegisteredUser bool
 	}
 	lockSessionHandlerMockCreateSession.RLock()
 	calls = mock.calls.CreateSession

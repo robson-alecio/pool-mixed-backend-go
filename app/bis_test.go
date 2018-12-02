@@ -52,7 +52,7 @@ func TestVisit(t *testing.T) {
 	}
 
 	sessionHandlerMock := &SessionHandlerMock{
-		CreateSessionFunc: func(ID kallax.ULID) *Session {
+		CreateSessionFunc: func(ID kallax.ULID, flag bool) *Session {
 			return &Session{}
 		},
 	}
@@ -76,7 +76,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	sessionHandlerMock := &SessionHandlerMock{
-		CreateSessionFunc: func(ID kallax.ULID) *Session {
+		CreateSessionFunc: func(ID kallax.ULID, flag bool) *Session {
 			return &Session{}
 		},
 	}

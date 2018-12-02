@@ -10,7 +10,7 @@ import (
 //SessionHandler ...
 //go:generate moq -out sessionhandler_moq.go . SessionHandler
 type SessionHandler interface {
-	CreateSession(userID kallax.ULID) *Session
+	CreateSession(userID kallax.ULID, registeredUser bool) *Session
 	SaveSession(session Session) Session
 }
 
@@ -34,10 +34,11 @@ func NewSessionHandler(db *sql.DB) *SessionHandlerImpl {
 }
 
 //CreateSession ...
-func (h SessionHandlerImpl) CreateSession(userID kallax.ULID) *Session {
+func (h SessionHandlerImpl) CreateSession(userID kallax.ULID, registeredUser bool) *Session {
 	session := Session{
-		ID:     kallax.NewULID(),
-		UserID: userID,
+		ID:             kallax.NewULID(),
+		UserID:         userID,
+		RegisteredUser: registeredUser,
 	}
 	h.SaveSession(session)
 

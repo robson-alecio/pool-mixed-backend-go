@@ -20,7 +20,8 @@ func Visit(helper HTTPHelper, userHandler UserHandler, sessionHandler SessionHan
 	}
 
 	createSession := func(v interface{}) (interface{}, error) {
-		return sessionHandler.CreateSession(v.(User).ID), nil
+		user := v.(User)
+		return sessionHandler.CreateSession(user.ID, user.IsRegistered()), nil
 	}
 
 	helper.Process(nil, createAnonUser, createSession)
@@ -34,7 +35,8 @@ func Login(helper HTTPHelper, userHandler UserHandler, sessionHandler SessionHan
 	}
 
 	createSession := func(v interface{}) (interface{}, error) {
-		return sessionHandler.CreateSession(v.(*User).ID), nil
+		user := v.(*User)
+		return sessionHandler.CreateSession(user.ID, user.IsRegistered()), nil
 	}
 
 	helper.Process(&LoginData{}, findUser, createSession)

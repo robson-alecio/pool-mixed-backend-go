@@ -1,7 +1,9 @@
 package app
 
 import (
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 
@@ -44,11 +46,15 @@ func (handler *UserHandlerImpl) CreateUserFromData(d *UserCreationData) (User, e
 		return User{}, ErrPasswordDoNotMatch("Passwords don't match")
 	}
 
+	hasher := md5.New()
+	hasher.Write([]byte(d.Password))
+	encryptedPassword := hex.EncodeToString(hasher.Sum(nil))
+
 	user := User{
 		ID:       kallax.NewULID(),
 		Login:    d.Login,
 		Name:     d.Name,
-		Password: d.Password,
+		Password: encryptedPassword,
 	}
 	return user, nil
 }

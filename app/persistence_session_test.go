@@ -19,9 +19,10 @@ func TestCreateSession(t *testing.T) {
 	}
 
 	userID := kallax.NewULID()
-	session := handler.CreateSession(userID)
+	session := handler.CreateSession(userID, true)
 
 	assert.AssertEqual(t, userID, session.UserID)
+	assert.AssertTrue(t, session.RegisteredUser)
 	assert.AssertEqual(t, 1, len(store.SaveCalls()))
 }
 
@@ -44,7 +45,7 @@ func TestFindSessionByID(t *testing.T) {
 	assert.AssertNotNil(t, session)
 	assert.AssertNil(t, err)
 	assert.AssertEqual(t, 1, len(store.FindOneCalls()))
-	sqlExpected := "SELECT __session.id, __session.created_at, __session.updated_at, __session.user_id " +
+	sqlExpected := "SELECT __session.id, __session.created_at, __session.updated_at, __session.user_id, __session.registered_user " +
 		"FROM poll_session __session WHERE __session.id IN ($1)"
 	assert.AssertEqual(t, sqlExpected, sqlExecuted)
 }

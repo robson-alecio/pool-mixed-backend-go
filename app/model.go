@@ -16,12 +16,18 @@ type User struct {
 	Password string
 }
 
+//IsRegistered ...
+func (u *User) IsRegistered() bool {
+	return u.Password != ""
+}
+
 //Session ...
 type Session struct {
 	kallax.Model `table:"poll_session"`
 	kallax.Timestamps
-	ID     kallax.ULID `pk:""`
-	UserID kallax.ULID
+	ID             kallax.ULID `pk:""`
+	UserID         kallax.ULID
+	RegisteredUser bool
 }
 
 //Poll ...

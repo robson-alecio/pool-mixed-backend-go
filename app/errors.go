@@ -7,6 +7,13 @@ func (e ErrPasswordDoNotMatch) Error() string {
 	return string(e)
 }
 
+//ErrUserNotLogged ...
+type ErrUserNotLogged string
+
+func (e ErrUserNotLogged) Error() string {
+	return string(e)
+}
+
 //ErrNotChangePoll ...
 type ErrNotChangePoll string
 

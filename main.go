@@ -131,8 +131,8 @@ func LoginEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	Login(NewHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
-//StartCreatePoll ...
-func StartCreatePoll(w http.ResponseWriter, r *http.Request) {
+//StartCreatePollEndpointEntry ...
+func StartCreatePollEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
 		var data CreatePollData
 		mapstructure.Decode(protoData, &data)
@@ -432,13 +432,7 @@ func CheckAuthentication(w http.ResponseWriter, r *http.Request) (*Session, erro
 		return nil, errCheck
 	}
 
-	user, errUser := userHandler.FindUserByID(session.UserID)
-
-	if errUser != nil {
-		return nil, errUser
-	}
-
-	if user.Password == "" {
+	if session.RegisteredUser {
 		return nil, ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
 	}
 
@@ -487,7 +481,7 @@ func ConfigStartServer() {
 	router.HandleFunc("/visit", VisitEndpointEntry).Methods("POST")
 	router.HandleFunc("/login", LoginEndpointEntry).Methods("POST")
 
-	router.HandleFunc("/polls", StartCreatePoll).Methods("POST")
+	router.HandleFunc("/polls", StartCreatePollEndpointEntry).Methods("POST")
 	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
 	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
 	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
@@ -513,4 +507,3 @@ func main() {
 // Endpoint for published polls
 // Poll DTO for GETs
 // Split files by packages
-// Encrypt password

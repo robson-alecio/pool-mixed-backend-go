@@ -1673,6 +1673,8 @@ func (r *Session) ColumnAddress(col string) (interface{}, error) {
 		return &r.Timestamps.UpdatedAt, nil
 	case "user_id":
 		return &r.UserID, nil
+	case "registered_user":
+		return &r.RegisteredUser, nil
 
 	default:
 		return nil, fmt.Errorf("kallax: invalid column in Session: %s", col)
@@ -1690,6 +1692,8 @@ func (r *Session) Value(col string) (interface{}, error) {
 		return r.Timestamps.UpdatedAt, nil
 	case "user_id":
 		return r.UserID, nil
+	case "registered_user":
+		return r.RegisteredUser, nil
 
 	default:
 		return nil, fmt.Errorf("kallax: invalid column in Session: %s", col)
@@ -1994,6 +1998,12 @@ func (q *SessionQuery) FindByUpdatedAt(cond kallax.ScalarCond, v time.Time) *Ses
 // the UserID property is equal to the passed value.
 func (q *SessionQuery) FindByUserID(v kallax.ULID) *SessionQuery {
 	return q.Where(kallax.Eq(Schema.Session.UserID, v))
+}
+
+// FindByRegisteredUser adds a new filter to the query that will require that
+// the RegisteredUser property is equal to the passed value.
+func (q *SessionQuery) FindByRegisteredUser(v bool) *SessionQuery {
+	return q.Where(kallax.Eq(Schema.Session.RegisteredUser, v))
 }
 
 // SessionResultSet is the set of results returned by a query to the
@@ -2613,10 +2623,11 @@ type schemaPollVote struct {
 
 type schemaSession struct {
 	*kallax.BaseSchema
-	ID        kallax.SchemaField
-	CreatedAt kallax.SchemaField
-	UpdatedAt kallax.SchemaField
-	UserID    kallax.SchemaField
+	ID             kallax.SchemaField
+	CreatedAt      kallax.SchemaField
+	UpdatedAt      kallax.SchemaField
+	UserID         kallax.SchemaField
+	RegisteredUser kallax.SchemaField
 }
 
 type schemaUser struct {
@@ -2714,11 +2725,13 @@ var Schema = &schema{
 			kallax.NewSchemaField("created_at"),
 			kallax.NewSchemaField("updated_at"),
 			kallax.NewSchemaField("user_id"),
+			kallax.NewSchemaField("registered_user"),
 		),
-		ID:        kallax.NewSchemaField("id"),
-		CreatedAt: kallax.NewSchemaField("created_at"),
-		UpdatedAt: kallax.NewSchemaField("updated_at"),
-		UserID:    kallax.NewSchemaField("user_id"),
+		ID:             kallax.NewSchemaField("id"),
+		CreatedAt:      kallax.NewSchemaField("created_at"),
+		UpdatedAt:      kallax.NewSchemaField("updated_at"),
+		UserID:         kallax.NewSchemaField("user_id"),
+		RegisteredUser: kallax.NewSchemaField("registered_user"),
 	},
 	User: &schemaUser{
 		BaseSchema: kallax.NewBaseSchema(
