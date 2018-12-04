@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"net/http"
+
+	"gopkg.in/src-d/go-kallax.v1"
 )
 
 //ProcessingBlock ...
@@ -11,17 +13,24 @@ type ProcessingBlock func(v interface{}) (interface{}, error)
 //HTTPHelper ...
 //go:generate moq -out httphelper_moq.go . HTTPHelper
 type HTTPHelper interface {
-	Process(v interface{}, blocks ...ProcessingBlock)
+	Process(interface{}, ...ProcessingBlock)
+	ValidateSession() error
+	GetRequestSessionID() (string, error)
+	IsRegisteredUser() bool
+	Forbid(error)
+	LoggedUserID() kallax.ULID
 }
 
 //HTTPHelperImpl ...
 type HTTPHelperImpl struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
+	CheckSession   func(ID string) error
+	Session        *Session
 }
 
 //NewHTTPHelper ...
-func NewHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelper {
+func NewHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelperImpl {
 	return HTTPHelperImpl{
 		Request:        r,
 		ResponseWriter: w,
@@ -50,4 +59,40 @@ func (h HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 	}
 
 	json.NewEncoder(h.ResponseWriter).Encode(result)
+}
+
+//ValidateSession ...
+func (h HTTPHelperImpl) ValidateSession() error {
+	ID, err := h.GetRequestSessionID()
+	if err != nil {
+		return err
+	}
+
+	return h.CheckSession(ID)
+}
+
+//GetRequestSessionID ...
+func (h HTTPHelperImpl) GetRequestSessionID() (string, error) {
+	sessionID := h.Request.Header.Get("sessionId")
+
+	if sessionID == "" {
+		return "", ErrUserNotLogged("Must be logged to perform this action. Missing value.")
+	}
+
+	return sessionID, nil
+}
+
+//IsRegisteredUser ...
+func (h HTTPHelperImpl) IsRegisteredUser() bool {
+	return h.Session != nil && h.Session.RegisteredUser
+}
+
+//Forbid ...
+func (h HTTPHelperImpl) Forbid(err error) {
+	http.Error(h.ResponseWriter, err.Error(), http.StatusForbidden)
+}
+
+//LoggedUserID ...
+func (h HTTPHelperImpl) LoggedUserID() kallax.ULID {
+	return h.Session.UserID
 }

@@ -16,70 +16,13 @@ import (
 	. "github/RobsonAlecio/pool-mixed-backend-go/app"
 )
 
-// AuthenticatedFunction ...
-type AuthenticatedFunction func(session *Session, data interface{}) (interface{}, error)
-
 /////// Repositories
 var db *sql.DB
 var userHandler *UserHandlerImpl
 var sessionHandler *SessionHandlerImpl
-var pollStore *PollStore
-var pollOptionStore *PollOptionStore
+var pollHandler *PollHandlerImpl
+var pollOptionHandler *PollOptionHandlerImpl
 var pollVoteStore *PollVoteStore
-
-//SavePoll ...
-func SavePoll(poll *Poll) (bool, error) {
-	log.Println("Saving Poll", poll)
-
-	return pollStore.Save(poll)
-}
-
-// SavePollOption ...
-func SavePollOption(pollOption *PollOption) (bool, error) {
-	log.Println("Adding Poll Option", pollOption)
-
-	return pollOptionStore.Save(pollOption)
-}
-
-// DeletePollOption ...
-func DeletePollOption(id kallax.ULID) error {
-	log.Println("Removing Poll Option", id)
-
-	query := NewPollOptionQuery().FindByID(id)
-
-	opt, err := pollOptionStore.FindOne(query)
-
-	if err != nil {
-		return err
-	}
-
-	return pollOptionStore.Delete(opt)
-}
-
-//FindPollByID ...
-func FindPollByID(ID kallax.ULID) (*Poll, error) {
-	query := NewPollQuery().FindByID(ID)
-	poll, err := pollStore.FindOne(query)
-
-	if err != nil {
-		return poll, err
-	}
-
-	options, errOption := FindPollOptions(ID)
-	if errOption != nil {
-		return poll, errOption
-	}
-
-	poll.Options = options
-
-	return poll, nil
-}
-
-// FindPollOptions ...
-func FindPollOptions(id kallax.ULID) ([]*PollOption, error) {
-	query := NewPollOptionQuery().FindByOwner(id)
-	return pollOptionStore.FindAll(query)
-}
 
 //SaveVote ...
 func SaveVote(vote PollVote) PollVote {
@@ -101,49 +44,24 @@ func PollAlreadyVotedByUser(pollID, userID kallax.ULID) (bool, error) {
 	return count > 0, err
 }
 
-//ExistsOption ...
-func ExistsOption(pollID kallax.ULID, candidate string) (bool, error) {
-	query := NewPollOptionQuery().
-		FindByOwner(pollID).
-		FindByContent(candidate)
-
-	count, err := pollOptionStore.Count(query)
-
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
-}
-
 //CreateUserEndpointEntry ...
 func CreateUserEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	CreateUser(NewHTTPHelper(w, r), userHandler)
+	CreateUser(CreateHTTPHelper(w, r), userHandler)
 }
 
 //VisitEndpointEntry ...
 func VisitEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	Visit(NewHTTPHelper(w, r), userHandler, sessionHandler)
+	Visit(CreateHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
 //LoginEndpointEntry ...
 func LoginEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	Login(NewHTTPHelper(w, r), userHandler, sessionHandler)
+	Login(CreateHTTPHelper(w, r), userHandler, sessionHandler)
 }
 
 //StartCreatePollEndpointEntry ...
 func StartCreatePollEndpointEntry(w http.ResponseWriter, r *http.Request) {
-	ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
-		var data CreatePollData
-		mapstructure.Decode(protoData, &data)
-
-		return SavePoll(&Poll{
-			ID:      kallax.NewULID(),
-			Name:    data.Name,
-			Options: make([]*PollOption, 0),
-			Owner:   session.UserID,
-		})
-	})
+	StartCreatePoll(CreateHTTPHelper(w, r), pollHandler)
 }
 
 //AddOption ...
@@ -466,11 +384,28 @@ func ConnectToDatabase() {
 
 	userHandler = NewUserHandler(db)
 	sessionHandler = NewSessionHandler(db)
-	pollStore = NewPollStore(db)
-	pollOptionStore = NewPollOptionStore(db)
+	pollOptionHandler = NewPollOptionHandler(db)
+	pollHandler = NewPollHandler(db, poll)
 	pollVoteStore = NewPollVoteStore(db)
 
 	log.Println("Successfuly connected!")
+}
+
+func CreateHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelperImpl {
+	helper := NewHTTPHelper(w, r)
+
+	helper.CheckSession = func(ID string) error {
+		realID, err := kallax.NewULIDFromText(sessionID)
+		if err != nil {
+			return nil, err
+		}
+
+		session, errFind := sessionHandler.FindSessionByID(realID)
+		helper.Session = session
+		return errFind
+	}
+
+	return helper
 }
 
 // ConfigStartServer ...

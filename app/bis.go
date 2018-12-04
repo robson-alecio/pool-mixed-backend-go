@@ -1,5 +1,7 @@
 package app
 
+import kallax "gopkg.in/src-d/go-kallax.v1"
+
 //CreateUser ...
 func CreateUser(helper HTTPHelper, handler UserHandler) {
 	createUser := func(v interface{}) (interface{}, error) {
@@ -40,4 +42,45 @@ func Login(helper HTTPHelper, userHandler UserHandler, sessionHandler SessionHan
 	}
 
 	helper.Process(&LoginData{}, findUser, createSession)
+}
+
+//StartCreatePoll ...
+func StartCreatePoll(helper HTTPHelper, pollHandler PollHandler) {
+	createPoll := func(v interface{}) (interface{}, error) {
+		data := v.(*CreatePollData)
+		return pollHandler.SavePoll(Poll{
+			ID:      kallax.NewULID(),
+			Name:    data.Name,
+			Options: make([]*PollOption, 0),
+			Owner:   helper.LoggedUserID(),
+		}), nil
+	}
+	ExecuteAuthenticated(helper, CreatePollData{}, createPoll)
+}
+
+//ExecuteAuthenticated ...
+func ExecuteAuthenticated(helper HTTPHelper, v interface{}, blocks ...ProcessingBlock) {
+	err := CheckAuthentication(helper)
+
+	if err != nil {
+		helper.Forbid(err)
+		return
+	}
+
+	helper.Process(v)
+}
+
+//CheckAuthentication ...
+func CheckAuthentication(helper HTTPHelper) error {
+	errCheck := helper.ValidateSession()
+
+	if errCheck != nil {
+		return errCheck
+	}
+
+	if helper.IsRegisteredUser() {
+		return ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
+	}
+
+	return nil
 }
