@@ -55,7 +55,7 @@ func StartCreatePoll(helper HTTPHelper, pollHandler PollHandler) {
 			Owner:   helper.LoggedUserID(),
 		}), nil
 	}
-	ExecuteAuthenticated(helper, CreatePollData{}, createPoll)
+	ExecuteAuthenticated(helper, &CreatePollData{}, createPoll)
 }
 
 //ExecuteAuthenticated ...
@@ -67,7 +67,7 @@ func ExecuteAuthenticated(helper HTTPHelper, v interface{}, blocks ...Processing
 		return
 	}
 
-	helper.Process(v)
+	helper.Process(v, blocks...)
 }
 
 //CheckAuthentication ...
@@ -78,7 +78,7 @@ func CheckAuthentication(helper HTTPHelper) error {
 		return errCheck
 	}
 
-	if helper.IsRegisteredUser() {
+	if !helper.IsRegisteredUser() {
 		return ErrUserNotLogged("Must be logged to perform this action. Not authenticated.")
 	}
 

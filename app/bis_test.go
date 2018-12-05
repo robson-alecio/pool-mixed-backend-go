@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.in/src-d/go-kallax.v1"
@@ -8,7 +9,7 @@ import (
 	"github.com/chai2010/assert"
 )
 
-func HelperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
+func helperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 	var r interface{} = v
 	var e error
 	for _, f := range blocks {
@@ -20,10 +21,28 @@ func HelperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 	}
 }
 
-func TestCreateUser(t *testing.T) {
-	helperMock := &HTTPHelperMock{
-		ProcessFunc: HelperMockProcessFunc,
+func loggedUserID() kallax.ULID {
+	ulid, _ := kallax.NewULIDFromText("c4dfaa18-103f-47a9-b6d3-ece7758832b5")
+	return ulid
+}
+
+func createBasicHelperMock() *HTTPHelperMock {
+	return &HTTPHelperMock{
+		ProcessFunc: helperMockProcessFunc,
 	}
+}
+
+func createAuthenticatedHelperMock() *HTTPHelperMock {
+	return &HTTPHelperMock{
+		ProcessFunc:          helperMockProcessFunc,
+		ValidateSessionFunc:  func() error { return nil },
+		IsRegisteredUserFunc: func() bool { return true },
+		LoggedUserIDFunc:     loggedUserID,
+	}
+}
+
+func TestCreateUser(t *testing.T) {
+	helperMock := createBasicHelperMock()
 	handlerMock := &UserHandlerMock{
 		CreateUserFromDataFunc: func(d *UserCreationData) (User, error) {
 			return User{}, nil
@@ -40,9 +59,7 @@ func TestCreateUser(t *testing.T) {
 }
 
 func TestVisit(t *testing.T) {
-	helperMock := &HTTPHelperMock{
-		ProcessFunc: HelperMockProcessFunc,
-	}
+	helperMock := createBasicHelperMock()
 	userHandlerMock := &UserHandlerMock{
 		CreateAnonUserFunc: func() User {
 			return User{
@@ -64,9 +81,7 @@ func TestVisit(t *testing.T) {
 }
 
 func TestLogin(t *testing.T) {
-	helperMock := &HTTPHelperMock{
-		ProcessFunc: HelperMockProcessFunc,
-	}
+	helperMock := createBasicHelperMock()
 	userHandlerMock := &UserHandlerMock{
 		FindUserByLoginAndPasswordFunc: func(login, password string) (*User, error) {
 			return &User{
@@ -85,4 +100,55 @@ func TestLogin(t *testing.T) {
 
 	assert.AssertEqual(t, 1, len(userHandlerMock.FindUserByLoginAndPasswordCalls()))
 	assert.AssertEqual(t, 1, len(sessionHandlerMock.CreateSessionCalls()))
+}
+
+func TestStartCreatePoll(t *testing.T) {
+	var savedPoll Poll
+	helperMock := createAuthenticatedHelperMock()
+	pollHandlerMock := &PollHandlerMock{
+		SavePollFunc: func(poll Poll) Poll {
+			savedPoll = poll
+			return poll
+		},
+	}
+
+	StartCreatePoll(helperMock, pollHandlerMock)
+
+	assert.AssertEqual(t, loggedUserID(), savedPoll.Owner)
+	assert.AssertEqual(t, 1, len(pollHandlerMock.SavePollCalls()))
+}
+
+func TestShouldGetErrorForSessionInvalidOnCheckAuthentication(t *testing.T) {
+	helperMock := &HTTPHelperMock{
+		ValidateSessionFunc:  func() error { return fmt.Errorf("Dammit") },
+		IsRegisteredUserFunc: func() bool { return true },
+	}
+
+	err := CheckAuthentication(helperMock)
+
+	assert.AssertEqual(t, "Dammit", err.Error())
+}
+
+func TestShouldGetErrorForUserUnregisteredOnCheckAuthentication(t *testing.T) {
+	helperMock := &HTTPHelperMock{
+		ValidateSessionFunc:  func() error { return nil },
+		IsRegisteredUserFunc: func() bool { return false },
+	}
+
+	err := CheckAuthentication(helperMock)
+
+	assert.AssertEqual(t, "Must be logged to perform this action. Not authenticated.", err.Error())
+}
+
+func TestShouldForbidExecution(t *testing.T) {
+	var errorMessage string
+	helperMock := &HTTPHelperMock{
+		ValidateSessionFunc: func() error { return fmt.Errorf("Invalid session") },
+		ForbidFunc:          func(err error) { errorMessage = err.Error() },
+	}
+
+	ExecuteAuthenticated(helperMock, &LoginData{})
+
+	assert.AssertEqual(t, 1, len(helperMock.ForbidCalls()))
+	assert.AssertEqual(t, "Invalid session", errorMessage)
 }
