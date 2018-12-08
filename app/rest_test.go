@@ -160,3 +160,27 @@ func TestProcessWithInvalidJSON(t *testing.T) {
 	expected := "invalid character 'K' looking for beginning of value"
 	assert.AssertEqual(t, expected, strings.TrimSpace(result.String()))
 }
+
+func TestValidateSession(t *testing.T) {
+	t.Fail()
+}
+
+func TestGetRequestSessionID(t *testing.T) {
+	t.Fail()
+}
+
+func TestIsRegisteredUser(t *testing.T) {
+	t.Fail()
+}
+
+func TestForbid(t *testing.T) {
+	t.Fail()
+}
+
+func TestLoggedUserID(t *testing.T) {
+	t.Fail()
+}
+
+func TestGetVar(t *testing.T) {
+	t.Fail()
+}
