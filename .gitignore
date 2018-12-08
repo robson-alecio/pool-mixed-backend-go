@@ -1,3 +1,4 @@
 pool-mixed-backend-go
 *.old
 /migrations/lock.json
+debug

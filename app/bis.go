@@ -123,7 +123,7 @@ func changePollOrCry(helper HTTPHelper, pollHandler PollHandler,
 	}
 
 	checkOwner := func(v interface{}) (interface{}, error) {
-		pack := v.(ChangePollDataPack)
+		pack := v.(*ChangePollDataPack)
 
 		if pack.PollTarget.Owner != helper.LoggedUserID() {
 			return nil, ErrNotChangePoll("Can't change a poll from other user.")
@@ -133,11 +133,11 @@ func changePollOrCry(helper HTTPHelper, pollHandler PollHandler,
 	}
 
 	savePoll := func(v interface{}) (interface{}, error) {
-		pack := v.(*ChangePollDataPack)
+		poll := v.(*Poll)
 
-		pollHandler.SavePoll(*(pack.PollTarget))
+		pollHandler.SavePoll(*poll)
 
-		return pack.PollTarget, nil
+		return poll, nil
 	}
 
 	ExecuteAuthenticated(helper, &AddOptionData{},

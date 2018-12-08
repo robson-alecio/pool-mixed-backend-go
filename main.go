@@ -297,7 +297,7 @@ func ConnectToDatabase() {
 	log.Println("Successfuly connected!")
 }
 
-func createHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelperImpl {
+func createHTTPHelper(w http.ResponseWriter, r *http.Request) *HTTPHelperImpl {
 	helper := NewHTTPHelper(w, r)
 
 	helper.CheckSession = func(ID string) error {

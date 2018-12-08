@@ -32,15 +32,15 @@ type HTTPHelperImpl struct {
 }
 
 //NewHTTPHelper ...
-func NewHTTPHelper(w http.ResponseWriter, r *http.Request) HTTPHelperImpl {
-	return HTTPHelperImpl{
+func NewHTTPHelper(w http.ResponseWriter, r *http.Request) *HTTPHelperImpl {
+	return &HTTPHelperImpl{
 		Request:        r,
 		ResponseWriter: w,
 	}
 }
 
 //Process ...
-func (h HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
+func (h *HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 	err := json.NewDecoder(h.Request.Body).Decode(&v)
 
 	if err != nil {
@@ -64,7 +64,7 @@ func (h HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 }
 
 //ValidateSession ...
-func (h HTTPHelperImpl) ValidateSession() error {
+func (h *HTTPHelperImpl) ValidateSession() error {
 	ID, err := h.GetRequestSessionID()
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (h HTTPHelperImpl) ValidateSession() error {
 }
 
 //GetRequestSessionID ...
-func (h HTTPHelperImpl) GetRequestSessionID() (string, error) {
+func (h *HTTPHelperImpl) GetRequestSessionID() (string, error) {
 	sessionID := h.Request.Header.Get("sessionId")
 
 	if sessionID == "" {
@@ -85,21 +85,21 @@ func (h HTTPHelperImpl) GetRequestSessionID() (string, error) {
 }
 
 //IsRegisteredUser ...
-func (h HTTPHelperImpl) IsRegisteredUser() bool {
+func (h *HTTPHelperImpl) IsRegisteredUser() bool {
 	return h.Session != nil && h.Session.RegisteredUser
 }
 
 //Forbid ...
-func (h HTTPHelperImpl) Forbid(err error) {
+func (h *HTTPHelperImpl) Forbid(err error) {
 	http.Error(h.ResponseWriter, err.Error(), http.StatusForbidden)
 }
 
 //LoggedUserID ...
-func (h HTTPHelperImpl) LoggedUserID() kallax.ULID {
+func (h *HTTPHelperImpl) LoggedUserID() kallax.ULID {
 	return h.Session.UserID
 }
 
 //GetVar ...
-func (h HTTPHelperImpl) GetVar(name string) string {
+func (h *HTTPHelperImpl) GetVar(name string) string {
 	return mux.Vars(h.Request)["id"]
 }
