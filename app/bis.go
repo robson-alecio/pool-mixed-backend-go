@@ -72,19 +72,24 @@ func AddOption(helper HTTPHelper, pollHandler PollHandler, pollOptionHandler Pol
 	effectiveChange := func(v interface{}) (interface{}, error) {
 		pack := v.(*ChangePollDataPack)
 
-		pollOptionHandler.SavePollOption(PollOption{
-			ID:      kallax.NewULID(),
-			Owner:   pack.PollTarget,
-			Content: pack.Data.(*AddOptionData).Value,
-		})
+		pollOption := createPollOptionFrom(pack.PollTarget, pack.Data.(*AddOptionData))
+		pollOptionHandler.SavePollOption(*pollOption)
 
 		return pack.PollTarget, nil
 	}
 
-	changePollOrCry(helper, pollHandler, pollOptionHandler, effectiveChange)
+	changePollOrCry(helper, &AddOptionData{}, pollHandler, pollOptionHandler, effectiveChange)
 }
 
-func changePollOrCry(helper HTTPHelper, pollHandler PollHandler,
+func createPollOptionFrom(poll *Poll, data *AddOptionData) *PollOption {
+	return &PollOption{
+		ID:      kallax.NewULID(),
+		Owner:   poll,
+		Content: data.Value,
+	}
+}
+
+func changePollOrCry(helper HTTPHelper, data interface{}, pollHandler PollHandler,
 	pollOptionHandler PollOptionHandler, effectiveChange ProcessingBlock) {
 	getPollID := func(v interface{}) (interface{}, error) {
 		ID, err := kallax.NewULIDFromText(helper.GetVar("id"))
@@ -140,7 +145,7 @@ func changePollOrCry(helper HTTPHelper, pollHandler PollHandler,
 		return poll, nil
 	}
 
-	ExecuteAuthenticated(helper, &AddOptionData{},
+	ExecuteAuthenticated(helper, data,
 		getPollID, getPoll, checkPublished, checkOwner, effectiveChange, savePoll)
 }
 

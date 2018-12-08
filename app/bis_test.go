@@ -41,6 +41,18 @@ func createAuthenticatedHelperMock() *HTTPHelperMock {
 	}
 }
 
+func getPollIDVarValue(string) string {
+	return "01678ef4-3fd6-7e86-a52b-a1ed224aa249"
+}
+
+func createPollChangeHelperMock() *HTTPHelperMock {
+	helperMock := createAuthenticatedHelperMock()
+
+	helperMock.GetVarFunc = getPollIDVarValue
+
+	return helperMock
+}
+
 func TestCreateUser(t *testing.T) {
 	helperMock := createBasicHelperMock()
 	handlerMock := &UserHandlerMock{
@@ -151,4 +163,52 @@ func TestShouldForbidExecution(t *testing.T) {
 
 	assert.AssertEqual(t, 1, len(helperMock.ForbidCalls()))
 	assert.AssertEqual(t, "Invalid session", errorMessage)
+}
+
+func TestShouldChangePollCryWhenNotExtractPollID(t *testing.T) {
+	t.Fail()
+}
+
+func TestShouldChangeCryWhenNotFindPoll(t *testing.T) {
+	t.Fail()
+}
+
+func TestShouldChangeCryWhenPollPublished(t *testing.T) {
+	t.Fail()
+}
+
+func TestShouldChangeCryWhenPollOwnedByOtherUser(t *testing.T) {
+	t.Fail()
+}
+
+func TestAddOption(t *testing.T) {
+	helperMock := createPollChangeHelperMock()
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return &Poll{
+				Published: false,
+				Owner:     loggedUserID(),
+			}, nil
+		},
+		SavePollFunc: func(v Poll) Poll {
+			return v
+		},
+	}
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		SavePollOptionFunc: func(v PollOption) PollOption {
+			return v
+		},
+	}
+
+	AddOption(helperMock, pollHandlerMock, pollOptionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(helperMock.GetVarCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.FindPollByIDCalls()))
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.SavePollOptionCalls()))
+}
+
+func TestCreatePollOptionFromData(t *testing.T) {
+	t.Fail()
 }
