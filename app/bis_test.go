@@ -9,6 +9,28 @@ import (
 	"github.com/chai2010/assert"
 )
 
+type ProcessErrorBox struct {
+	Object       interface{}
+	ErrorOcurred error
+}
+
+func helperMockProcessFuncBoxed(box *ProcessErrorBox) func(interface{}, ...ProcessingBlock) {
+	return func(v interface{}, blocks ...ProcessingBlock) {
+		var r interface{} = v
+		var e error
+		box.Object = r
+		for _, f := range blocks {
+			r, e = f(r)
+
+			if e != nil {
+				box.ErrorOcurred = e
+				return
+			}
+
+			box.Object = r
+		}
+	}
+}
 func helperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 	var r interface{} = v
 	var e error
@@ -49,6 +71,14 @@ func createPollChangeHelperMock() *HTTPHelperMock {
 	helperMock := createAuthenticatedHelperMock()
 
 	helperMock.GetVarFunc = getPollIDVarValue
+
+	return helperMock
+}
+
+func createPollChangeProcessBoxedHelperMock(box *ProcessErrorBox) *HTTPHelperMock {
+	helperMock := createPollChangeHelperMock()
+
+	helperMock.ProcessFunc = helperMockProcessFuncBoxed(box)
 
 	return helperMock
 }
@@ -166,19 +196,67 @@ func TestShouldForbidExecution(t *testing.T) {
 }
 
 func TestShouldChangePollCryWhenNotExtractPollID(t *testing.T) {
-	t.Fail()
+	box := &ProcessErrorBox{}
+
+	helperMock := createPollChangeHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "avocado"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxed(box)
+
+	changePollOrCry(helperMock, &AddOptionData{}, nil, nil, nil)
+
+	assert.AssertEqual(t, "uuid: UUID string too short: avocado", box.ErrorOcurred.Error())
 }
 
 func TestShouldChangeCryWhenNotFindPoll(t *testing.T) {
-	t.Fail()
+	box := &ProcessErrorBox{}
+	helperMock := createPollChangeProcessBoxedHelperMock(box)
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return nil, fmt.Errorf("Deadpoll")
+		},
+	}
+
+	changePollOrCry(helperMock, &AddOptionData{}, pollHandlerMock, nil, nil)
+
+	assert.AssertEqual(t, "Deadpoll", box.ErrorOcurred.Error())
 }
 
 func TestShouldChangeCryWhenPollPublished(t *testing.T) {
-	t.Fail()
+	box := &ProcessErrorBox{}
+	helperMock := createPollChangeProcessBoxedHelperMock(box)
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return &Poll{
+				Published: true,
+			}, nil
+		},
+	}
+
+	changePollOrCry(helperMock, &AddOptionData{}, pollHandlerMock, nil, nil)
+
+	assert.AssertEqual(t, "Can't change a published poll.", box.ErrorOcurred.Error())
 }
 
 func TestShouldChangeCryWhenPollOwnedByOtherUser(t *testing.T) {
-	t.Fail()
+	box := &ProcessErrorBox{}
+	helperMock := createPollChangeProcessBoxedHelperMock(box)
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			ownerID, _ := kallax.NewULIDFromText("b5ffeb10-712a-45ee-b939-e27033bf1db5")
+			return &Poll{
+				Owner: ownerID,
+			}, nil
+		},
+	}
+
+	changePollOrCry(helperMock, &AddOptionData{}, pollHandlerMock, nil, nil)
+
+	assert.AssertEqual(t, "Can't change a poll from other user.", box.ErrorOcurred.Error())
 }
 
 func TestAddOption(t *testing.T) {
@@ -210,5 +288,10 @@ func TestAddOption(t *testing.T) {
 }
 
 func TestCreatePollOptionFromData(t *testing.T) {
-	t.Fail()
+	poll := &Poll{}
+
+	option := createPollOptionFrom(poll, &AddOptionData{"Opt"})
+
+	assert.AssertEqual(t, poll, option.Owner)
+	assert.AssertEqual(t, "Opt", option.Content)
 }

@@ -20,7 +20,7 @@ type HTTPHelper interface {
 	IsRegisteredUser() bool
 	Forbid(error)
 	LoggedUserID() kallax.ULID
-	GetVar(string) string
+	GetVar(name string) string
 }
 
 //HTTPHelperImpl ...
