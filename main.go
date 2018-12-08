@@ -60,20 +60,9 @@ func StartCreatePollEndpointEntry(w http.ResponseWriter, r *http.Request) {
 	StartCreatePoll(createHTTPHelper(w, r), pollHandler)
 }
 
-//AddOption ...
-func AddOption(w http.ResponseWriter, r *http.Request) {
-	// ExecuteAuthenticated(w, r, func(session *Session, protoData interface{}) (interface{}, error) {
-	// 	return ChangePollOrCry(w, r, session, func(poll *Poll) {
-	// 		var data AddOptionData
-	// 		mapstructure.Decode(protoData, &data)
-
-	// 		SavePollOption(&PollOption{
-	// 			ID:      kallax.NewULID(),
-	// 			Owner:   poll,
-	// 			Content: data.Value,
-	// 		})
-	// 	})
-	// })
+//AddOptionEndpointEtry ...
+func AddOptionEndpointEtry(w http.ResponseWriter, r *http.Request) {
+	AddOption(createHTTPHelper(w, r), pollHandler, pollOptionHandler)
 }
 
 //RemoveOption ...
@@ -102,34 +91,6 @@ func Publish(w http.ResponseWriter, r *http.Request) {
 	// 		poll.Published = true
 	// 	})
 	// })
-}
-
-//ChangePollOrCry ...
-func ChangePollOrCry(w http.ResponseWriter, r *http.Request, session *Session, fChange func(aPoll *Poll)) (bool, error) {
-	// vars := mux.Vars(r)
-	// id, err := kallax.NewULIDFromText(vars["id"])
-	// if err != nil {
-	// 	return false, ErrNotChangePoll(err.Error())
-	// }
-
-	// poll, errFind := FindPollByID(id)
-
-	// if errFind != nil {
-	// 	http.Error(w, errFind.Error(), http.StatusBadRequest)
-	// }
-
-	// if poll.Published {
-	// 	return false, ErrNotChangePoll("Can't change a published poll.")
-	// }
-
-	// if poll.Owner != session.UserID {
-	// 	return false, ErrNotChangePoll("Can't change a poll from other user.")
-	// }
-
-	// fChange(poll)
-
-	// return SavePoll(poll)
-	return false, nil
 }
 
 //CreateVote ...
@@ -362,7 +323,7 @@ func ConfigStartServer() {
 	router.HandleFunc("/login", LoginEndpointEntry).Methods("POST")
 
 	router.HandleFunc("/polls", StartCreatePollEndpointEntry).Methods("POST")
-	router.HandleFunc("/polls/{id}", AddOption).Methods("PUT")
+	router.HandleFunc("/polls/{id}", AddOptionEndpointEtry).Methods("PUT")
 	router.HandleFunc("/polls/{id}", RemoveOption).Methods("DELETE")
 	router.HandleFunc("/polls/{id}/publish", Publish).Methods("PUT")
 	router.HandleFunc("/polls/{id}/vote", CreateVote).Methods("POST")
@@ -387,3 +348,4 @@ func main() {
 // Endpoint for published polls
 // Poll DTO for GETs
 // Split files by packages
+// Poll Options with defined order

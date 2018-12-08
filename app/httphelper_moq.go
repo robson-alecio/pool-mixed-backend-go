@@ -11,6 +11,7 @@ import (
 var (
 	lockHTTPHelperMockForbid              sync.RWMutex
 	lockHTTPHelperMockGetRequestSessionID sync.RWMutex
+	lockHTTPHelperMockGetVar              sync.RWMutex
 	lockHTTPHelperMockIsRegisteredUser    sync.RWMutex
 	lockHTTPHelperMockLoggedUserID        sync.RWMutex
 	lockHTTPHelperMockProcess             sync.RWMutex
@@ -28,6 +29,9 @@ var (
 //             },
 //             GetRequestSessionIDFunc: func() (string, error) {
 // 	               panic("mock out the GetRequestSessionID method")
+//             },
+//             GetVarFunc: func(in1 string) string {
+// 	               panic("mock out the GetVar method")
 //             },
 //             IsRegisteredUserFunc: func() bool {
 // 	               panic("mock out the IsRegisteredUser method")
@@ -54,6 +58,9 @@ type HTTPHelperMock struct {
 	// GetRequestSessionIDFunc mocks the GetRequestSessionID method.
 	GetRequestSessionIDFunc func() (string, error)
 
+	// GetVarFunc mocks the GetVar method.
+	GetVarFunc func(in1 string) string
+
 	// IsRegisteredUserFunc mocks the IsRegisteredUser method.
 	IsRegisteredUserFunc func() bool
 
@@ -75,6 +82,11 @@ type HTTPHelperMock struct {
 		}
 		// GetRequestSessionID holds details about calls to the GetRequestSessionID method.
 		GetRequestSessionID []struct {
+		}
+		// GetVar holds details about calls to the GetVar method.
+		GetVar []struct {
+			// In1 is the in1 argument value.
+			In1 string
 		}
 		// IsRegisteredUser holds details about calls to the IsRegisteredUser method.
 		IsRegisteredUser []struct {
@@ -149,6 +161,37 @@ func (mock *HTTPHelperMock) GetRequestSessionIDCalls() []struct {
 	lockHTTPHelperMockGetRequestSessionID.RLock()
 	calls = mock.calls.GetRequestSessionID
 	lockHTTPHelperMockGetRequestSessionID.RUnlock()
+	return calls
+}
+
+// GetVar calls GetVarFunc.
+func (mock *HTTPHelperMock) GetVar(in1 string) string {
+	if mock.GetVarFunc == nil {
+		panic("HTTPHelperMock.GetVarFunc: method is nil but HTTPHelper.GetVar was just called")
+	}
+	callInfo := struct {
+		In1 string
+	}{
+		In1: in1,
+	}
+	lockHTTPHelperMockGetVar.Lock()
+	mock.calls.GetVar = append(mock.calls.GetVar, callInfo)
+	lockHTTPHelperMockGetVar.Unlock()
+	return mock.GetVarFunc(in1)
+}
+
+// GetVarCalls gets all the calls that were made to GetVar.
+// Check the length with:
+//     len(mockedHTTPHelper.GetVarCalls())
+func (mock *HTTPHelperMock) GetVarCalls() []struct {
+	In1 string
+} {
+	var calls []struct {
+		In1 string
+	}
+	lockHTTPHelperMockGetVar.RLock()
+	calls = mock.calls.GetVar
+	lockHTTPHelperMockGetVar.RUnlock()
 	return calls
 }
 

@@ -1,6 +1,8 @@
 package app
 
-import kallax "gopkg.in/src-d/go-kallax.v1"
+import (
+	kallax "gopkg.in/src-d/go-kallax.v1"
+)
 
 //CreateUser ...
 func CreateUser(helper HTTPHelper, handler UserHandler) {
@@ -56,6 +58,90 @@ func StartCreatePoll(helper HTTPHelper, pollHandler PollHandler) {
 		}), nil
 	}
 	ExecuteAuthenticated(helper, &CreatePollData{}, createPoll)
+}
+
+//ChangePollDataPack ...
+type ChangePollDataPack struct {
+	PollID     kallax.ULID
+	PollTarget *Poll
+	Data       interface{}
+}
+
+//AddOption ...
+func AddOption(helper HTTPHelper, pollHandler PollHandler, pollOptionHandler PollOptionHandler) {
+	effectiveChange := func(v interface{}) (interface{}, error) {
+		pack := v.(*ChangePollDataPack)
+
+		pollOptionHandler.SavePollOption(PollOption{
+			ID:      kallax.NewULID(),
+			Owner:   pack.PollTarget,
+			Content: pack.Data.(*AddOptionData).Value,
+		})
+
+		return pack.PollTarget, nil
+	}
+
+	changePollOrCry(helper, pollHandler, pollOptionHandler, effectiveChange)
+}
+
+func changePollOrCry(helper HTTPHelper, pollHandler PollHandler,
+	pollOptionHandler PollOptionHandler, effectiveChange ProcessingBlock) {
+	getPollID := func(v interface{}) (interface{}, error) {
+		ID, err := kallax.NewULIDFromText(helper.GetVar("id"))
+		if err != nil {
+			return nil, ErrNotChangePoll(err.Error())
+		}
+
+		return &ChangePollDataPack{
+			PollID: ID,
+			Data:   v,
+		}, nil
+	}
+
+	getPoll := func(v interface{}) (interface{}, error) {
+		pack := v.(*ChangePollDataPack)
+
+		poll, errFind := pollHandler.FindPollByID(pack.PollID)
+
+		if errFind != nil {
+			return nil, errFind
+		}
+
+		pack.PollTarget = poll
+
+		return pack, nil
+	}
+
+	checkPublished := func(v interface{}) (interface{}, error) {
+		pack := v.(*ChangePollDataPack)
+
+		if pack.PollTarget.Published {
+			return nil, ErrNotChangePoll("Can't change a published poll.")
+		}
+
+		return pack, nil
+	}
+
+	checkOwner := func(v interface{}) (interface{}, error) {
+		pack := v.(ChangePollDataPack)
+
+		if pack.PollTarget.Owner != helper.LoggedUserID() {
+			return nil, ErrNotChangePoll("Can't change a poll from other user.")
+		}
+
+		return pack, nil
+	}
+
+	savePoll := func(v interface{}) (interface{}, error) {
+		pack := v.(*ChangePollDataPack)
+
+		pollHandler.SavePoll(*(pack.PollTarget))
+
+		return pack.PollTarget, nil
+	}
+
+	ExecuteAuthenticated(helper, &AddOptionData{},
+		getPollID, getPoll, checkPublished, checkOwner, effectiveChange, savePoll)
 }
 
 //ExecuteAuthenticated ...

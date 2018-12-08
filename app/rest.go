@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"gopkg.in/src-d/go-kallax.v1"
 )
 
@@ -19,6 +20,7 @@ type HTTPHelper interface {
 	IsRegisteredUser() bool
 	Forbid(error)
 	LoggedUserID() kallax.ULID
+	GetVar(string) string
 }
 
 //HTTPHelperImpl ...
@@ -95,4 +97,9 @@ func (h HTTPHelperImpl) Forbid(err error) {
 //LoggedUserID ...
 func (h HTTPHelperImpl) LoggedUserID() kallax.ULID {
 	return h.Session.UserID
+}
+
+//GetVar ...
+func (h HTTPHelperImpl) GetVar(name string) string {
+	return mux.Vars(h.Request)["id"]
 }
