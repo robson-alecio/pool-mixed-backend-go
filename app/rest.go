@@ -96,10 +96,14 @@ func (h *HTTPHelperImpl) Forbid(err error) {
 
 //LoggedUserID ...
 func (h *HTTPHelperImpl) LoggedUserID() kallax.ULID {
+	if h.Session == nil {
+		return kallax.NewULID()
+	}
+
 	return h.Session.UserID
 }
 
 //GetVar ...
 func (h *HTTPHelperImpl) GetVar(name string) string {
-	return mux.Vars(h.Request)["id"]
+	return mux.Vars(h.Request)[name]
 }

@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"testing"
+	"time"
+
+	"gopkg.in/src-d/go-kallax.v1"
 
 	"github.com/chai2010/assert"
 )
@@ -162,25 +166,151 @@ func TestProcessWithInvalidJSON(t *testing.T) {
 }
 
 func TestValidateSession(t *testing.T) {
-	t.Fail()
+	result := bytes.NewBuffer(make([]byte, 0))
+	writer := FakeResponseWriter{
+		FakeHeader: make(http.Header, 0),
+		FakeWriter: result,
+	}
+
+	header := http.Header{
+		textproto.CanonicalMIMEHeaderKey("sessionId"): []string{"7d97abb1-2f1b-4542-8173-67e78a590ab9"},
+	}
+
+	helper := &HTTPHelperImpl{
+		ResponseWriter: writer,
+		Request: &http.Request{
+			Header: header,
+		},
+		CheckSession: func(ID string) error {
+			return nil
+		},
+	}
+
+	err := helper.ValidateSession()
+	assert.AssertTrue(t, err == nil)
 }
 
-func TestGetRequestSessionID(t *testing.T) {
-	t.Fail()
+func TestValidateSessionFailWhenNotHaveSessionId(t *testing.T) {
+	header := http.Header{
+		textproto.CanonicalMIMEHeaderKey("sessionId"): []string{},
+	}
+
+	helper := &HTTPHelperImpl{
+		Request: &http.Request{
+			Header: header,
+		},
+		CheckSession: func(ID string) error {
+			return nil
+		},
+	}
+
+	err := helper.ValidateSession()
+	assert.AssertEqual(t, "Must be logged to perform this action. Missing value.", err.Error())
 }
 
 func TestIsRegisteredUser(t *testing.T) {
-	t.Fail()
+	helper := &HTTPHelperImpl{
+		Session: &Session{
+			RegisteredUser: true,
+		},
+	}
+
+	result := helper.IsRegisteredUser()
+	assert.AssertTrue(t, result)
+}
+
+func TestIsNotRegisteredUser(t *testing.T) {
+	helper := &HTTPHelperImpl{
+		Session: &Session{
+			RegisteredUser: false,
+		},
+	}
+
+	result := helper.IsRegisteredUser()
+	assert.AssertFalse(t, result)
+}
+func TestIsNotRegisteredUserWithoutSession(t *testing.T) {
+	helper := &HTTPHelperImpl{}
+
+	result := helper.IsRegisteredUser()
+	assert.AssertFalse(t, result)
 }
 
 func TestForbid(t *testing.T) {
-	t.Fail()
+	result := bytes.NewBuffer(make([]byte, 0))
+	writer := FakeResponseWriter{
+		FakeHeader: make(http.Header, 0),
+		FakeWriter: result,
+	}
+
+	helper := &HTTPHelperImpl{
+		ResponseWriter: writer,
+	}
+
+	helper.Forbid(fmt.Errorf("Baba Yaga"))
+
+	expected := "Baba Yaga"
+	assert.AssertEqual(t, expected, strings.TrimSpace(result.String()))
 }
 
 func TestLoggedUserID(t *testing.T) {
-	t.Fail()
+	userID := kallax.NewULID()
+	helper := &HTTPHelperImpl{
+		Session: &Session{
+			UserID: userID,
+		},
+	}
+
+	result := helper.LoggedUserID()
+	assert.AssertEqual(t, userID, result)
+}
+func TestLoggedUserIDWithoutSession(t *testing.T) {
+	helper := &HTTPHelperImpl{}
+
+	first := helper.LoggedUserID()
+	second := helper.LoggedUserID()
+	assert.AssertNotEqual(t, first, second)
 }
 
+type FakeContext struct {
+	Values map[string]string
+}
+
+func (f FakeContext) Deadline() (deadline time.Time, ok bool) {
+	return time.Now().Add(time.Duration(6 * time.Hour)), true
+}
+
+func (f FakeContext) Done() <-chan struct{} {
+	return make(chan struct{})
+}
+
+func (f FakeContext) Err() error {
+	return nil
+}
+
+func (f FakeContext) Value(key interface{}) interface{} {
+	return f.Values
+}
+
+type contextKey int
+
+const (
+	varsKey contextKey = iota
+)
+
 func TestGetVar(t *testing.T) {
-	t.Fail()
+	fakeContext := FakeContext{
+		Values: map[string]string{
+			"something": "I would like a dinner reservation for midnight",
+		},
+	}
+
+	request := (&http.Request{}).WithContext(fakeContext)
+
+	helper := &HTTPHelperImpl{
+		Request: request,
+	}
+
+	result := helper.GetVar("something")
+	assert.AssertEqual(t, "I would like a dinner reservation for midnight", result)
 }

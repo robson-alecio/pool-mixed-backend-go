@@ -30,7 +30,7 @@ var (
 //             GetRequestSessionIDFunc: func() (string, error) {
 // 	               panic("mock out the GetRequestSessionID method")
 //             },
-//             GetVarFunc: func(in1 string) string {
+//             GetVarFunc: func(name string) string {
 // 	               panic("mock out the GetVar method")
 //             },
 //             IsRegisteredUserFunc: func() bool {
@@ -59,7 +59,7 @@ type HTTPHelperMock struct {
 	GetRequestSessionIDFunc func() (string, error)
 
 	// GetVarFunc mocks the GetVar method.
-	GetVarFunc func(in1 string) string
+	GetVarFunc func(name string) string
 
 	// IsRegisteredUserFunc mocks the IsRegisteredUser method.
 	IsRegisteredUserFunc func() bool
@@ -85,8 +85,8 @@ type HTTPHelperMock struct {
 		}
 		// GetVar holds details about calls to the GetVar method.
 		GetVar []struct {
-			// In1 is the in1 argument value.
-			In1 string
+			// Name is the name argument value.
+			Name string
 		}
 		// IsRegisteredUser holds details about calls to the IsRegisteredUser method.
 		IsRegisteredUser []struct {
@@ -165,29 +165,29 @@ func (mock *HTTPHelperMock) GetRequestSessionIDCalls() []struct {
 }
 
 // GetVar calls GetVarFunc.
-func (mock *HTTPHelperMock) GetVar(in1 string) string {
+func (mock *HTTPHelperMock) GetVar(name string) string {
 	if mock.GetVarFunc == nil {
 		panic("HTTPHelperMock.GetVarFunc: method is nil but HTTPHelper.GetVar was just called")
 	}
 	callInfo := struct {
-		In1 string
+		Name string
 	}{
-		In1: in1,
+		Name: name,
 	}
 	lockHTTPHelperMockGetVar.Lock()
 	mock.calls.GetVar = append(mock.calls.GetVar, callInfo)
 	lockHTTPHelperMockGetVar.Unlock()
-	return mock.GetVarFunc(in1)
+	return mock.GetVarFunc(name)
 }
 
 // GetVarCalls gets all the calls that were made to GetVar.
 // Check the length with:
 //     len(mockedHTTPHelper.GetVarCalls())
 func (mock *HTTPHelperMock) GetVarCalls() []struct {
-	In1 string
+	Name string
 } {
 	var calls []struct {
-		In1 string
+		Name string
 	}
 	lockHTTPHelperMockGetVar.RLock()
 	calls = mock.calls.GetVar
