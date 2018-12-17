@@ -31,6 +31,21 @@ func helperMockProcessFuncBoxed(box *ProcessErrorBox) func(interface{}, ...Proce
 		}
 	}
 }
+
+func helperMockProcessFuncInputed(input interface{}) func(interface{}, ...ProcessingBlock) {
+	return func(v interface{}, blocks ...ProcessingBlock) {
+		var r interface{} = input
+		var e error
+		for _, f := range blocks {
+			r, e = f(r)
+
+			if e != nil {
+				return
+			}
+		}
+	}
+}
+
 func helperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 	var r interface{} = v
 	var e error
@@ -284,6 +299,7 @@ func TestAddOption(t *testing.T) {
 
 	assert.AssertEqual(t, 1, len(helperMock.GetVarCalls()))
 	assert.AssertEqual(t, 1, len(pollHandlerMock.FindPollByIDCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.SavePollCalls()))
 	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.SavePollOptionCalls()))
 }
 
@@ -294,4 +310,92 @@ func TestCreatePollOptionFromData(t *testing.T) {
 
 	assert.AssertEqual(t, poll, option.Owner)
 	assert.AssertEqual(t, "Opt", option.Content)
+}
+
+func TestRemoveOption(t *testing.T) {
+	helperMock := createPollChangeHelperMock()
+	helperMock.ProcessFunc = helperMockProcessFuncInputed(&RemoveOptionData{
+		Value: "9d627cdc-8e4a-435e-a2f7-c9bafaa41e45",
+	})
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return &Poll{
+				Published: false,
+				Owner:     loggedUserID(),
+			}, nil
+		},
+		SavePollFunc: func(v Poll) Poll {
+			return v
+		},
+	}
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		DeletePollOptionFunc: func(id kallax.ULID) error {
+			return nil
+		},
+	}
+
+	RemoveOption(helperMock, pollHandlerMock, pollOptionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(helperMock.GetVarCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.FindPollByIDCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.SavePollCalls()))
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.DeletePollOptionCalls()))
+}
+
+func TestRemoveOptionWhenIdDoesNotExists(t *testing.T) {
+	helperMock := createPollChangeHelperMock()
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return &Poll{
+				Published: false,
+				Owner:     loggedUserID(),
+			}, nil
+		},
+		SavePollFunc: func(v Poll) Poll {
+			return v
+		},
+	}
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		DeletePollOptionFunc: func(id kallax.ULID) error {
+			return nil
+		},
+	}
+
+	RemoveOption(helperMock, pollHandlerMock, pollOptionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(helperMock.GetVarCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.FindPollByIDCalls()))
+	assert.AssertEqual(t, 0, len(pollHandlerMock.SavePollCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.DeletePollOptionCalls()))
+}
+
+func TestPublish(t *testing.T) {
+	helperMock := createPollChangeHelperMock()
+
+	poll := &Poll{
+		Published: false,
+		Owner:     loggedUserID(),
+	}
+
+	pollHandlerMock := &PollHandlerMock{
+		FindPollByIDFunc: func(ID kallax.ULID) (*Poll, error) {
+			return poll, nil
+		},
+		SavePollFunc: func(v Poll) Poll {
+			return v
+		},
+	}
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{}
+
+	Publish(helperMock, pollHandlerMock, pollOptionHandlerMock)
+
+	assert.AssertEqual(t, 1, len(helperMock.GetVarCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.FindPollByIDCalls()))
+	assert.AssertEqual(t, 1, len(pollHandlerMock.SavePollCalls()))
+	assert.AssertTrue(t, poll.Published)
 }

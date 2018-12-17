@@ -17,7 +17,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n\t\"login\": \"robson.alecio@gmail.com\",\n\t\"password\": \"12345678\",\n\t\"passwordConfirm\": \"12345678\"\n}"
+					"raw": "{\n\t\"login\": \"robson.alecio+002@gmail.com\",\n\t\"password\": \"12345678\",\n\t\"passwordConfirm\": \"12345678\"\n}"
 				},
 				"url": {
 					"raw": "{{host}}/users",
@@ -190,7 +190,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n\t\"name\": \"Poll A\"\n}"
+					"raw": "{\n\t\"name\": \"Poll B\"\n}"
 				},
 				"url": {
 					"raw": "{{host}}/polls",
@@ -264,7 +264,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n\t\"value\": \"A\"\n}"
+					"raw": "{\n\t\"value\": \"Y\"\n}"
 				},
 				"url": {
 					"raw": "{{host}}/polls/{{pollId}}",
@@ -463,7 +463,7 @@
 	],
 	"variable": [
 		{
-			"id": "64e4bdad-c40a-41bb-ba3b-cd0da8650e68",
+			"id": "9c7bf8d2-26b8-4da3-b3f0-b871154e43f9",
 			"key": "host",
 			"value": "localhost:8000",
 			"type": "string",
