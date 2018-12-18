@@ -266,7 +266,7 @@ func CreateVote(helper HTTPHelper, pollOptionHandler PollOptionHandler, pollVote
 		return result, nil
 	}
 
-	ExecuteSessioned(helper, makeCreateVoteDataPack, validateOption, validateVoted, createVote,
+	ExecuteSessioned(helper, &PollVoteData{}, makeCreateVoteDataPack, validateOption, validateVoted, createVote,
 		mountResult)
 }
 

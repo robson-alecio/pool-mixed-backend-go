@@ -43,7 +43,7 @@ func NewHTTPHelper(w http.ResponseWriter, r *http.Request) *HTTPHelperImpl {
 func (h *HTTPHelperImpl) Process(v interface{}, blocks ...ProcessingBlock) {
 	err := json.NewDecoder(h.Request.Body).Decode(&v)
 
-	if err != nil {
+	if err != nil && err.Error() != "EOF" {
 		http.Error(h.ResponseWriter, err.Error(), http.StatusBadRequest)
 		return
 	}

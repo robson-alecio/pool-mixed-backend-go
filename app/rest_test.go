@@ -165,6 +165,32 @@ func TestProcessWithInvalidJSON(t *testing.T) {
 	assert.AssertEqual(t, expected, strings.TrimSpace(result.String()))
 }
 
+func TestProcessWithoutJSON(t *testing.T) {
+	result := bytes.NewBuffer(make([]byte, 0))
+	writer := FakeResponseWriter{
+		FakeHeader: make(http.Header, 0),
+		FakeWriter: result,
+	}
+
+	reader := JSONReader{
+		InnerReader: strings.NewReader(""),
+	}
+	helper := &HTTPHelperImpl{
+		ResponseWriter: writer,
+		Request: &http.Request{
+			Body: reader,
+		},
+	}
+
+	convert := func(v interface{}) (interface{}, error) {
+		return &FakeObject{}, nil
+	}
+
+	helper.Process(&FakeData{}, convert)
+
+	expected := `{"Color":"","Name":""}`
+	assert.AssertEqual(t, expected, strings.TrimSpace(result.String()))
+}
 func TestValidateSession(t *testing.T) {
 	result := bytes.NewBuffer(make([]byte, 0))
 	writer := FakeResponseWriter{
