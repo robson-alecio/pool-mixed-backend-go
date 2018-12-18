@@ -399,3 +399,66 @@ func TestPublish(t *testing.T) {
 	assert.AssertEqual(t, 1, len(pollHandlerMock.SavePollCalls()))
 	assert.AssertTrue(t, poll.Published)
 }
+
+func TestCreateVote(t *testing.T) {
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "c5c1827e-2649-49ee-b960-cd04ac34c1a8"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncInputed(&PollVoteData{
+		Value: "Terceira",
+	})
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+			return true, nil
+		},
+		FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+			return []*PollOption{
+				&PollOption{Content: "A"},
+				&PollOption{Content: "B"},
+				&PollOption{Content: "C"},
+			}, nil
+		},
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+			return false, nil
+		},
+		SaveVoteFunc: func(vote PollVote) PollVote {
+			return vote
+		},
+		VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+			return 1
+		},
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 1, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 1, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 3, len(pollVoteHandlerMock.VotesForCalls()))
+}
+
+func TestShouldNotCreateVoteWithoutPollID(t *testing.T) {
+	t.Errorf("Not implemented")
+}
+
+func TestShouldFailToFindExistentOptions(t *testing.T) {
+	t.Errorf("Not implemented")
+}
+
+func TestShouldFailWhenOptionNotExists(t *testing.T) {
+	t.Errorf("Not implemented")
+}
+
+func TestShouldFailToVerifyVoteExists(t *testing.T) {
+	t.Errorf("Not implemented")
+}
+
+func TestShouldFailWhenAlreadyVoted(t *testing.T) {
+	t.Errorf("Not implemented")
+}
