@@ -295,15 +295,21 @@ func CountVotes(pollID kallax.ULID, pollOptionHandler PollOptionHandler, pollVot
 	result := make(map[string]float64)
 	result["total"] = float64(total)
 
+	remainPerc := 100.0
 	for _, opt := range options {
-		countVote, ok := count[opt.Content]
+		countVote := count[opt.Content]
 
-		if ok {
-			perct := float64(countVote*100) / float64(total)
-			result[opt.Content] = math.Round(perct*100) / 100
-		} else {
-			result[opt.Content] = 0
-		}
+		perct := float64(countVote*100) / float64(total)
+		realPerc := math.Round(perct*100) / 100
+		result[opt.Content] = realPerc
+
+		remainPerc = remainPerc - realPerc
+	}
+
+	if remainPerc > 0.0 {
+		lastIndex := len(options) - 1
+		lastOption := options[lastIndex].Content
+		result[lastOption] = result[lastOption] + remainPerc
 	}
 
 	return result

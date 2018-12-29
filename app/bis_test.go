@@ -46,6 +46,24 @@ func helperMockProcessFuncInputed(input interface{}) func(interface{}, ...Proces
 	}
 }
 
+func helperMockProcessFuncBoxedInputed(box *ProcessErrorBox, input interface{}) func(interface{}, ...ProcessingBlock) {
+	return func(v interface{}, blocks ...ProcessingBlock) {
+		var r interface{} = input
+		var e error
+		box.Object = r
+		for _, f := range blocks {
+			r, e = f(r)
+
+			if e != nil {
+				box.ErrorOcurred = e
+				return
+			}
+
+			box.Object = r
+		}
+	}
+}
+
 func helperMockProcessFunc(v interface{}, blocks ...ProcessingBlock) {
 	var r interface{} = v
 	var e error
@@ -444,21 +462,319 @@ func TestCreateVote(t *testing.T) {
 }
 
 func TestShouldNotCreateVoteWithoutPollID(t *testing.T) {
-	t.Errorf("Not implemented")
+	box := &ProcessErrorBox{}
+
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "no-uuid"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxed(box)
+	// helperMock.ProcessFunc = helperMockProcessFuncInputed(&PollVoteData{
+	// 	Value: "Terceira",
+	// })
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		// ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+		// 	return true, nil
+		// },
+		// FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+		// 	return []*PollOption{
+		// 		&PollOption{Content: "A"},
+		// 		&PollOption{Content: "B"},
+		// 		&PollOption{Content: "C"},
+		// 	}, nil
+		// },
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		// PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+		// 	return false, nil
+		// },
+		// SaveVoteFunc: func(vote PollVote) PollVote {
+		// 	return vote
+		// },
+		// VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+		// 	return 1
+		// },
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, "uuid: UUID string too short: no-uuid", box.ErrorOcurred.Error())
 }
 
-func TestShouldFailToFindExistentOptions(t *testing.T) {
-	t.Errorf("Not implemented")
+func TestShouldCreateVoteFailWhenOptionExistsFail(t *testing.T) {
+	box := &ProcessErrorBox{}
+
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "c5c1827e-2649-49ee-b960-cd04ac34c1a8"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxedInputed(box, &PollVoteData{
+		Value: "Terceira",
+	})
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+			return false, fmt.Errorf("Fail")
+		},
+		// FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+		// 	return []*PollOption{
+		// 		&PollOption{Content: "A"},
+		// 		&PollOption{Content: "B"},
+		// 		&PollOption{Content: "C"},
+		// 	}, nil
+		// },
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		// PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+		// 	return false, nil
+		// },
+		// SaveVoteFunc: func(vote PollVote) PollVote {
+		// 	return vote
+		// },
+		// VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+		// 	return 1
+		// },
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, "Fail", box.ErrorOcurred.Error())
 }
 
-func TestShouldFailWhenOptionNotExists(t *testing.T) {
-	t.Errorf("Not implemented")
+func TestShouldCreateVoteFailWhenOptionNotExists(t *testing.T) {
+	box := &ProcessErrorBox{}
+
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "c5c1827e-2649-49ee-b960-cd04ac34c1a8"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxedInputed(box, &PollVoteData{
+		Value: "Terceira",
+	})
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+			return false, nil
+		},
+		// FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+		// 	return []*PollOption{
+		// 		&PollOption{Content: "A"},
+		// 		&PollOption{Content: "B"},
+		// 		&PollOption{Content: "C"},
+		// 	}, nil
+		// },
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		// PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+		// 	return false, nil
+		// },
+		// SaveVoteFunc: func(vote PollVote) PollVote {
+		// 	return vote
+		// },
+		// VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+		// 	return 1
+		// },
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, "There is no option Terceira for vote on this poll", box.ErrorOcurred.Error())
 }
 
-func TestShouldFailToVerifyVoteExists(t *testing.T) {
-	t.Errorf("Not implemented")
+func TestShouldCreateVoteFailWhenVerifyVoteExistsFail(t *testing.T) {
+	box := &ProcessErrorBox{}
+
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "c5c1827e-2649-49ee-b960-cd04ac34c1a8"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxedInputed(box, &PollVoteData{
+		Value: "Terceira",
+	})
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+			return true, nil
+		},
+		// FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+		// 	return []*PollOption{
+		// 		&PollOption{Content: "A"},
+		// 		&PollOption{Content: "B"},
+		// 		&PollOption{Content: "C"},
+		// 	}, nil
+		// },
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+			return false, fmt.Errorf("Fail")
+		},
+		// SaveVoteFunc: func(vote PollVote) PollVote {
+		// 	return vote
+		// },
+		// VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+		// 	return 1
+		// },
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 1, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, "Fail", box.ErrorOcurred.Error())
 }
 
-func TestShouldFailWhenAlreadyVoted(t *testing.T) {
-	t.Errorf("Not implemented")
+func TestShouldCreateVoteFailWhenAlreadyVoted(t *testing.T) {
+	box := &ProcessErrorBox{}
+
+	helperMock := createAuthenticatedHelperMock()
+	helperMock.GetVarFunc = func(name string) string {
+		return "c5c1827e-2649-49ee-b960-cd04ac34c1a8"
+	}
+	helperMock.ProcessFunc = helperMockProcessFuncBoxedInputed(box, &PollVoteData{
+		Value: "Terceira",
+	})
+
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		ExistsOptionFunc: func(pollID kallax.ULID, candidate string) (bool, error) {
+			return true, nil
+		},
+		// FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+		// 	return []*PollOption{
+		// 		&PollOption{Content: "A"},
+		// 		&PollOption{Content: "B"},
+		// 		&PollOption{Content: "C"},
+		// 	}, nil
+		// },
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		PollAlreadyVotedByUserFunc: func(pollID kallax.ULID, userID kallax.ULID) (bool, error) {
+			return true, nil
+		},
+		// SaveVoteFunc: func(vote PollVote) PollVote {
+		// 	return vote
+		// },
+		// VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+		// 	return 1
+		// },
+	}
+
+	CreateVote(helperMock, pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.ExistsOptionCalls()))
+	assert.AssertEqual(t, 0, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 1, len(pollVoteHandlerMock.PollAlreadyVotedByUserCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.SaveVoteCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, "You already voted in this poll", box.ErrorOcurred.Error())
+}
+
+func TestShouldCountVotes(t *testing.T) {
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+			return []*PollOption{
+				&PollOption{Content: "A"},
+				&PollOption{Content: "B"},
+				&PollOption{Content: "C"},
+			}, nil
+		},
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+			return 1
+		},
+	}
+
+	votes := CountVotes(kallax.NewULID(), pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 3, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, 33.33, votes["A"])
+	assert.AssertEqual(t, 33.33, votes["B"])
+	assert.AssertEqual(t, 33.34, votes["C"])
+	assert.AssertEqual(t, 3, votes["total"])
+}
+
+func TestShouldCountVotesWithoutRounding(t *testing.T) {
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+			return []*PollOption{
+				&PollOption{Content: "A"},
+				&PollOption{Content: "B"},
+				&PollOption{Content: "C"},
+			}, nil
+		},
+	}
+
+	counts := map[string]int64{
+		"A": 1,
+		"B": 2,
+		"C": 1,
+	}
+	pollVoteHandlerMock := &PollVoteHandlerMock{
+		VotesForFunc: func(pollID kallax.ULID, option string) int64 {
+			return counts[option]
+		},
+	}
+
+	votes := CountVotes(kallax.NewULID(), pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 3, len(pollVoteHandlerMock.VotesForCalls()))
+
+	assert.AssertEqual(t, 25.0, votes["A"])
+	assert.AssertEqual(t, 50.0, votes["B"])
+	assert.AssertEqual(t, 25.0, votes["C"])
+	assert.AssertEqual(t, 4, votes["total"])
+}
+
+func TestShouldCountVotesFailWhenFindExistentOptionsFail(t *testing.T) {
+	errorMsg := "Unable to take values."
+	pollOptionHandlerMock := &PollOptionHandlerMock{
+		FindPollOptionsFunc: func(pollID kallax.ULID) ([]*PollOption, error) {
+			return nil, fmt.Errorf(errorMsg)
+		},
+	}
+
+	pollVoteHandlerMock := &PollVoteHandlerMock{}
+
+	votes := CountVotes(kallax.NewULID(), pollOptionHandlerMock, pollVoteHandlerMock)
+
+	assert.AssertEqual(t, 1, len(pollOptionHandlerMock.FindPollOptionsCalls()))
+	assert.AssertEqual(t, 0, len(pollVoteHandlerMock.VotesForCalls()))
+
+	count, existsKey := votes[errorMsg]
+	assert.AssertEqual(t, true, existsKey)
+	assert.AssertEqual(t, -1, count)
+	assert.AssertEqual(t, 1, len(votes))
 }
